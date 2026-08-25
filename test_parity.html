@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Python-JS Parity Test</title>
+    <style>
+        body { font-family: monospace; }
+        .ok { color: green; }
+        .fail { color: red; }
+    </style>
+</head>
+<body>
+    <h1>Parity Test Results</h1>
+    <div id="output"></div>
+
+    <script type="module">
+        import { Simulator } from './js/sim.js';
+
+        async function runTests() {
+            const output = document.getElementById('output');
+            const log = (msg, isOk = true) => {
+                const div = document.createElement('div');
+                div.className = isOk ? 'ok' : 'fail';
+                div.innerText = msg;
+                output.appendChild(div);
+            };
+
+            try {
+                const configRes = await fetch('data/config.json');
+                const config = await configRes.json();
+                
+                const parityRes = await fetch('data/parity.json');
+                const parityData = await parityRes.json();
+                
+                const sim = new Simulator(config);
+                
+                let passed = 0;
+                let failed = 0;
+                
+                for (const item of parityData) {
+                    const input = item.input;
+                    const expected = item.expected;
+                    
+                    const cell = {
+                        id: item.id,
+                        b: input.b,
+                        gu: "test"
+                    };
+
+                    sim.getScenarioRawValues = () => ({
+                        rainArr: [input.r1, input.r3, input.r12],
+                        sigma: input.sigma,
+                        deg: input.deg
+                    });
+
+                    const result = sim.simulateCell(cell, input.elapsed_h, "custom");
+                    
+                    const EPSILON = 0.01;
+                    let isOk = true;
+                    let fails = [];
+                    
+                    const check = (key, val, exp) => {
+                        if (Math.abs(val - exp) >= EPSILON) {
+                            fails.push(`${key}: got ${val}, exp ${exp}`);
+                            isOk = false;
+                        }
+                    };
+
+                    check("r", result.r, expected.r);
+                    check("g", result.g, expected.g);
+                    check("t", result.t, expected.t);
+                    check("score", result.score, expected.score);
+                    
+                    if (result.stage !== expected.stage) {
+                        fails.push(`stage: got ${result.stage}, exp ${expected.stage}`);
+                        isOk = false;
+                    }
+
+                    if (isOk) {
+                        log(`[OK] ${item.desc}`);
+                        passed++;
+                    } else {
+                        log(`[FAIL] ${item.desc} - ${fails.join(', ')}`, false);
+                        failed++;
+                    }
+                }
+                
+                log(`\nResults: ${passed} passed, ${failed} failed`, failed === 0);
+
+            } catch (err) {
+                log(`Error: ${err.message}`, false);
+                console.error(err);
+            }
+        }
+
+        runTests();
+    </script>
+</body>
+</html>

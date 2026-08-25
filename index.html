@@ -1,10 +1,356 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>서울시 싱크홀 위험도 지도</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>서울시 싱크홀 위험도 실시간 지도</title>
+  <meta name="description" content="서울시 500m 격자 단위 싱크홀(지반침하) 위험도를 실시간으로 표시하는 지도입니다. 강수량·지하수위·교통·지반 데이터를 종합해 1·2·3단계로 위험도를 산정합니다." />
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── 디자인 토큰 ─────────────────────────────────────────────────── */
+    :root {
+      --bg-dark:       #0d1117;
+      --bg-card:       #161b22;
+      --bg-card2:      #21262d;
+      --border:        #30363d;
+      --text-primary:  #e6edf3;
+      --text-muted:    #7d8590;
+      --text-accent:   #58a6ff;
+
+      --stage1-color:  #2ea043;  /* 초록 */
+      --stage1-fill:   rgba(46,160,67,.35);
+      --stage2-color:  #d29922;  /* 노랑 */
+      --stage2-fill:   rgba(210,153,34,.45);
+      --stage3-color:  #da3633;  /* 빨강 */
+      --stage3-fill:   rgba(218,54,51,.55);
+      --stale-color:   #f0883e;
+
+      --radius:        8px;
+      --shadow:        0 4px 24px rgba(0,0,0,.5);
+      --font:          'Noto Sans KR', sans-serif;
+      --mono:          'JetBrains Mono', monospace;
+
+      --header-h:      56px;
+      --panel-w:       300px;
+    }
+
+    /* ── 리셋 ─────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: var(--font); background: var(--bg-dark); color: var(--text-primary); overflow: hidden; }
+
+    /* ── 헤더 ─────────────────────────────────────────────────────────── */
+    #header {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+      height: var(--header-h);
+      background: rgba(13,17,23,.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 16px; padding: 0 16px;
+    }
+    #header .logo {
+      display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+    }
+    #header .logo svg { width: 28px; height: 28px; }
+    #header .logo span { font-size: 1rem; font-weight: 700; letter-spacing: -.3px; }
+    #header .meta {
+      flex: 1; display: flex; align-items: center; gap: 10px;
+      font-size: .75rem; color: var(--text-muted);
+      overflow: hidden;
+    }
+    #generated-at { white-space: nowrap; font-family: var(--mono); }
+    #stale-badge {
+      display: none; padding: 2px 8px; border-radius: 12px;
+      background: var(--stale-color); color: #fff; font-size: .68rem; font-weight: 700;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+
+    #mode-badge {
+      padding: 2px 8px; border-radius: 12px; font-size: .7rem; font-weight: 600;
+      background: var(--bg-card2); border: 1px solid var(--border); flex-shrink: 0;
+    }
+
+    /* 단계 카운터 */
+    #stage-counters {
+      display: flex; gap: 6px; flex-shrink: 0; margin-left: auto;
+    }
+    .stage-chip {
+      display: flex; align-items: center; gap: 4px;
+      padding: 3px 10px; border-radius: 14px;
+      font-size: .72rem; font-weight: 600;
+      border: 1px solid transparent; cursor: default;
+      transition: transform .15s;
+    }
+    .stage-chip:hover { transform: scale(1.05); }
+    .stage-chip.s1 { background: rgba(46,160,67,.15); border-color: var(--stage1-color); color: var(--stage1-color); }
+    .stage-chip.s2 { background: rgba(210,153,34,.15); border-color: var(--stage2-color); color: var(--stage2-color); }
+    .stage-chip.s3 { background: rgba(218,54,51,.15); border-color: var(--stage3-color); color: var(--stage3-color); }
+    .stage-chip .dot { width: 7px; height: 7px; border-radius: 50%; }
+    .s1 .dot { background: var(--stage1-color); }
+    .s2 .dot { background: var(--stage2-color); }
+    .s3 .dot { background: var(--stage3-color); animation: pulse 1.5s infinite; }
+
+    /* ── 지도 ─────────────────────────────────────────────────────────── */
+    #map {
+      position: fixed;
+      top: var(--header-h); left: 0; right: 0; bottom: 0;
+    }
+    .leaflet-container { background: #1a1f2e !important; }
+
+    /* ── 우측 패널 ────────────────────────────────────────────────────── */
+    #side-panel {
+      position: fixed;
+      top: calc(var(--header-h) + 12px); right: 12px;
+      width: var(--panel-w); z-index: 900;
+      display: flex; flex-direction: column; gap: 10px;
+      pointer-events: none;
+    }
+    .panel-card {
+      background: rgba(22,27,34,.92);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      pointer-events: all;
+      box-shadow: var(--shadow);
+    }
+    .panel-card h3 {
+      font-size: .75rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .06em;
+      color: var(--text-muted); margin-bottom: 10px;
+    }
+
+    /* 범례 */
+    .legend-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 5px 0; font-size: .8rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .legend-item:last-child { border-bottom: none; }
+    .legend-swatch {
+      width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0;
+      border: 1px solid rgba(255,255,255,.15);
+    }
+    .legend-item .cond { color: var(--text-muted); font-size: .7rem; margin-left: auto; }
+
+    /* 소스 상태 */
+    .source-row {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 0; font-size: .78rem;
+    }
+    .src-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .src-dot.ok { background: var(--stage1-color); }
+    .src-dot.err { background: var(--stage3-color); animation: pulse 1.5s infinite; }
+    .src-dot.stale { background: var(--stale-color); }
+    .src-dot.unknown { background: var(--text-muted); }
+    .src-label { flex: 1; }
+    .src-status { color: var(--text-muted); font-size: .7rem; font-family: var(--mono); }
+
+    /* 시뮬 패널 */
+    .sim-row { margin-bottom: 10px; }
+    .sim-row label { display: block; font-size: .72rem; color: var(--text-muted); margin-bottom: 5px; }
+    .sim-row select, .sim-row input[type=range] { width: 100%; }
+    select {
+      background: var(--bg-card2); border: 1px solid var(--border);
+      color: var(--text-primary); border-radius: 5px; padding: 5px 8px;
+      font-family: var(--font); font-size: .78rem; cursor: pointer;
+      appearance: none; width: 100%;
+    }
+    input[type=range] {
+      accent-color: var(--text-accent); cursor: pointer;
+    }
+    .val-display {
+      font-family: var(--mono); font-size: .72rem;
+      color: var(--text-accent); text-align: right;
+    }
+
+    /* 재생 버튼 */
+    #play-row {
+      display: flex; gap: 6px; align-items: center; margin-top: 2px;
+    }
+    .btn {
+      flex: 1; padding: 6px; border-radius: 5px; font-size: .78rem;
+      border: 1px solid var(--border); background: var(--bg-card2);
+      color: var(--text-primary); cursor: pointer; font-family: var(--font);
+      transition: background .15s, border-color .15s;
+    }
+    .btn:hover { background: var(--bg-dark); border-color: var(--text-accent); }
+    .btn.active { background: var(--text-accent); border-color: var(--text-accent); color: #000; }
+    #time-display {
+      font-family: var(--mono); font-size: .72rem; color: var(--text-muted);
+      text-align: center; margin-top: 4px;
+    }
+
+    /* ── 팝업 커스텀 ─────────────────────────────────────────────────── */
+    .leaflet-popup-content-wrapper {
+      background: var(--bg-card) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: var(--radius) !important;
+      box-shadow: var(--shadow) !important;
+      color: var(--text-primary) !important;
+    }
+    .leaflet-popup-tip { background: var(--bg-card) !important; }
+    .leaflet-popup-content { margin: 12px 14px !important; min-width: 200px; }
+
+    .popup-header {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+    }
+    .popup-stage-badge {
+      padding: 2px 10px; border-radius: 12px; font-size: .72rem; font-weight: 700;
+    }
+    .popup-stage-badge.s1 { background: rgba(46,160,67,.2); color: var(--stage1-color); }
+    .popup-stage-badge.s2 { background: rgba(210,153,34,.2); color: var(--stage2-color); }
+    .popup-stage-badge.s3 { background: rgba(218,54,51,.2); color: var(--stage3-color); }
+    .popup-id { font-size: .7rem; color: var(--text-muted); font-family: var(--mono); }
+
+    .popup-score-bar {
+      background: var(--bg-card2); border-radius: 4px; overflow: hidden;
+      height: 6px; margin-bottom: 10px;
+    }
+    .popup-score-fill { height: 100%; transition: width .3s; border-radius: 4px; }
+
+    .popup-breakdown {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px;
+      font-size: .75rem;
+    }
+    .pb-item { display: flex; justify-content: space-between; }
+    .pb-label { color: var(--text-muted); }
+    .pb-value { font-family: var(--mono); font-weight: 500; }
+
+    /* ── 로딩 오버레이 ───────────────────────────────────────────────── */
+    #loading {
+      position: fixed; inset: 0; z-index: 9999;
+      background: var(--bg-dark);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 16px;
+    }
+    #loading .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--text-accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading p { font-size: .85rem; color: var(--text-muted); }
+
+    /* ── 반응형 (모바일 375px) ───────────────────────────────────────── */
+    @media (max-width: 600px) {
+      :root { --panel-w: calc(100vw - 24px); }
+      #side-panel {
+        top: auto; bottom: 12px; right: 12px; left: 12px;
+        width: auto;
+        flex-direction: row; overflow-x: auto;
+        flex-wrap: nowrap;
+        gap: 8px;
+      }
+      .panel-card { min-width: 220px; flex-shrink: 0; }
+      #stage-counters { display: none; }
+    }
+  </style>
 </head>
 <body>
-  <p>Phase 4에서 구현됩니다.</p>
+
+<!-- 로딩 -->
+<div id="loading">
+  <div class="spinner"></div>
+  <p id="loading-msg">격자 데이터 로드 중…</p>
+</div>
+
+<!-- 헤더 -->
+<header id="header">
+  <div class="logo">
+    <svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="14" cy="14" r="13" stroke="#58a6ff" stroke-width="1.5"/>
+      <path d="M14 4 L20 10 L20 18 L14 24 L8 18 L8 10 Z" fill="rgba(88,166,255,.15)" stroke="#58a6ff" stroke-width="1.5"/>
+      <circle cx="14" cy="14" r="3" fill="#da3633"/>
+    </svg>
+    <span>싱크홀 위험 지도</span>
+  </div>
+  <div class="meta">
+    <span id="generated-at">데이터 로드 중…</span>
+    <span id="stale-badge">갱신 지연</span>
+    <span id="mode-badge">—</span>
+  </div>
+  <div id="stage-counters">
+    <div class="stage-chip s1" id="chip-s1"><div class="dot"></div><span id="cnt-s1">—</span></div>
+    <div class="stage-chip s2" id="chip-s2"><div class="dot"></div><span id="cnt-s2">—</span></div>
+    <div class="stage-chip s3" id="chip-s3"><div class="dot"></div><span id="cnt-s3">—</span></div>
+  </div>
+</header>
+
+<!-- 지도 -->
+<div id="map"></div>
+
+<!-- 우측 패널 -->
+<aside id="side-panel">
+
+  <!-- 범례 -->
+  <div class="panel-card">
+    <h3>위험도 단계</h3>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background:var(--stage1-fill);border-color:var(--stage1-color)"></div>
+      <span>1단계 — 기저 주의</span>
+      <span class="cond">B≥10</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background:var(--stage2-fill);border-color:var(--stage2-color)"></div>
+      <span>2단계 — 강수 경보</span>
+      <span class="cond">+R≥15</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background:var(--stage3-fill);border-color:var(--stage3-color)"></div>
+      <span>3단계 — 극한 위험</span>
+      <span class="cond">+G≥10</span>
+    </div>
+  </div>
+
+  <!-- 소스 상태 -->
+  <div class="panel-card">
+    <h3>데이터 소스</h3>
+    <div class="source-row"><div class="src-dot unknown" id="dot-rain"></div><span class="src-label">강수 (기상청)</span><span class="src-status" id="st-rain">—</span></div>
+    <div class="source-row"><div class="src-dot unknown" id="dot-gw"></div><span class="src-label">지하수위 (GIMS)</span><span class="src-status" id="st-gw">—</span></div>
+    <div class="source-row"><div class="src-dot unknown" id="dot-tr"></div><span class="src-label">교통 (TOPIS)</span><span class="src-status" id="st-tr">—</span></div>
+  </div>
+
+  <!-- 시뮬레이션 패널 -->
+  <div class="panel-card">
+    <h3>시뮬레이션</h3>
+    <div class="sim-row">
+      <label>시나리오</label>
+      <select id="sel-scenario">
+        <option value="calm">평시 (calm)</option>
+        <option value="heavy_rain">호우경보 (heavy_rain)</option>
+        <option value="extreme" selected>극한호우 (extreme)</option>
+      </select>
+    </div>
+    <div class="sim-row">
+      <label>경과 시간 <span class="val-display" id="elapsed-val">0 h</span></label>
+      <input type="range" id="slider-elapsed" min="0" max="96" step="1" value="0" />
+    </div>
+    <div id="play-row">
+      <button class="btn" id="btn-reset" onclick="simReset()">↺ 초기화</button>
+      <button class="btn" id="btn-play" onclick="simToggle()">▶ 재생</button>
+    </div>
+    <div id="time-display">가상 시각: +<span id="t-hours">0</span>h</div>
+  </div>
+
+</aside>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- 감쇠·점수화 엔진 (Python 동일 로직) -->
+<script src="js/sim.js"></script>
+<!-- 지도 렌더링 -->
+<script src="js/render.js"></script>
+
 </body>
 </html>
