@@ -27,6 +27,7 @@ import yaml
 
 from ..fusion.decay import apply_decay
 from ..fusion.scoring import compute_g, compute_r, compute_stages, compute_t
+from ..fusion.bayes import bayesian_fuse, simple_fuse
 
 if TYPE_CHECKING:
     from ..core.clock import Clock
@@ -145,14 +146,15 @@ class GridRiskField:
 
     # ── 스냅샷 계산 ──────────────────────────────────────────────────────────
 
-    def snapshot(self, mode: str = "sim") -> dict:
+    def snapshot(self, mode: str = "sim", use_bayes: bool = True) -> dict:
         """현재 가상 시각 기준 위험도 스냅샷을 계산한다.
 
         감쇠를 적용한 R/G/T + B로 총점과 단계를 계산한다.
         AGENTS.md 5.2절 스키마를 정확히 따른다.
 
         Args:
-            mode: "sim" 또는 "real"
+            mode:      "sim" 또는 "real"
+            use_bayes: True이면 베이지안 융합 (unc 필드 채움), False이면 단순 가중합
 
         Returns:
             dict: snapshot.json 구조 (generated_at, mode, source_status, cells)
@@ -169,10 +171,14 @@ class GridRiskField:
         g_dec = apply_decay(self._g_scores, elapsed_g, self._grid_cfg)
         t_dec = apply_decay(self._t_scores, elapsed_t, self._grid_cfg)
 
-        # 총점
-        total = np.clip(self.baseline + r_dec + g_dec + t_dec, 0.0, 100.0)
+        # 총점 + 불확실성 (Phase 7-1 베이지안 융합)
+        if use_bayes:
+            total, unc_arr = bayesian_fuse(self.baseline, r_dec, g_dec, t_dec)
+        else:
+            total   = simple_fuse(self.baseline, r_dec, g_dec, t_dec)
+            unc_arr = np.full(len(self.baseline), np.nan)
 
-        # 단계 판정
+        # 단계 판정 (감쇠된 R/G 사용 — 단순 가중합과 동일 기준)
         stages = compute_stages(self.baseline, r_dec, g_dec, self._weights_cfg)
 
         # generated_at: 현재 KST (UTC+9)
@@ -190,7 +196,7 @@ class GridRiskField:
                 "r": round(float(r_dec[i]), 2),
                 "g": round(float(g_dec[i]), 2),
                 "t": round(float(t_dec[i]), 2),
-                "unc": None,  # Phase 6 이전: null
+                "unc": round(float(unc_arr[i]), 4) if not np.isnan(unc_arr[i]) else None,
             }
             for i in range(len(ids))
         ]

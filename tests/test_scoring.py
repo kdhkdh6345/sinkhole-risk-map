@@ -282,7 +282,9 @@ def test_snapshot_schema():
         assert not missing, f"셀 {cell['id']}: 필드 누락 {missing}"
         assert cell["stage"] in (1, 2, 3), f"stage={cell['stage']} 범위 밖"
         assert 0.0 <= cell["score"] <= 100.0
-        assert cell["unc"] is None  # Phase 6 이전: null
+        # Phase 7에서 unc는 실제 불확실성 값(float) 또는 None
+        assert cell["unc"] is None or isinstance(cell["unc"], float), \
+            f"unc={cell['unc']} — None 또는 float이어야 함"
 
     # JSON 직렬화 가능 여부 확인
     json_str = json.dumps(snap, ensure_ascii=False)
