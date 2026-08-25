@@ -1,0 +1,35 @@
+# 환경 변수 / API 키 (절대 커밋 금지)
+.env
+.env.*
+
+# 데이터 파일 (대용량, 불변 or 생성물)
+data/*.parquet
+data/*.npy
+data/*.npz
+
+# Python 캐시
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 빌드 / 배포
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# 에디터
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store

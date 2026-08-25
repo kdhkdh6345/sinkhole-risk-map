@@ -1,0 +1,93 @@
+# 배점·임계값·단계판정 규칙
+#
+# AGENTS.md 2절 3항: "배점·임계값을 코드에 숫자로 박지 않는다."
+# 이 파일의 값 외에는 어떤 점수도 코드에 등장해서는 안 된다.
+# 근거 출처: AGENTS.md 6절 "점수 설계"
+
+# ============================================================
+# 정적 기저점수 B (합: 0~60)
+# ============================================================
+static:
+  # 하수관 노후도·누수 (자치구별 노후 비율 min-max 정규화)
+  sewer:
+    max: 20
+
+  # 시추공 지층 / N값 (N값 역수 + 매립층 여부)
+  borehole:
+    max: 15
+
+  # 과거 침하·공동 이력 (반경 내 건수 × 최근성 감쇠)
+  history:
+    max: 15
+
+  # 액상화 위험등급 (상/중/하 매핑)
+  liquefaction:
+    max: 10
+    values:
+      high:   1.0
+      medium: 0.6
+      low:    0.2
+
+# ============================================================
+# 실시간 가중치 R/G/T (합: 0~40)
+# ============================================================
+realtime:
+  # 강수 R (0~25) — 기상청 특보 기준
+  # 근거: 기상청 호우특보 발령 기준 (기상법 시행령)
+  rain:
+    max: 25
+    thresholds:
+      # 낮은 점수부터 순서대로 나열 (마지막으로 매칭되는 구간 적용)
+      - name: precaution
+        score: 10
+        conditions:
+          any:
+            - {window_h: 1, mm: 20}   # 1h >= 20mm
+            - {window_h: 3, mm: 40}   # 3h >= 40mm
+      - name: advisory
+        score: 15
+        conditions:
+          any:
+            - {window_h: 3,  mm: 60}  # 3h >= 60mm
+            - {window_h: 12, mm: 110} # 12h >= 110mm
+      - name: warning
+        score: 20
+        conditions:
+          any:
+            - {window_h: 3,  mm: 90}  # 3h >= 90mm
+            - {window_h: 12, mm: 180} # 12h >= 180mm
+      - name: extreme
+        score: 25
+        conditions:
+          any:
+            - all:
+                - {window_h: 1, mm: 50}
+                - {window_h: 3, mm: 90}
+            - {window_h: 1, mm: 72}   # 1h >= 72mm
+
+  # 지하수위 G (0~10)
+  groundwater:
+    max: 10
+    sigma1_score: 5   # 1σ 이상 급락 시 가점
+    sigma2_score: 10  # 2σ 이상 급락 시 가점
+    # 조건: R >= min_rain 일 때만 인정 (강수 없는 단독 변동 배제)
+    min_rain_for_g: 15
+    # 조건: 연속 관측 횟수 충족해야 인정 (센서 오류 필터)
+    consecutive_obs: 2
+
+  # 교통 T (0~5) — Phase 3까지 정적 프록시 사용
+  traffic:
+    max: 5
+
+# ============================================================
+# 단계 판정 임계값
+# ============================================================
+# 근거: AGENTS.md 6절 "단계 판정"
+# B >= 30은 잠정값. 전체 격자 점수 분포로 튜닝 후 docs/tuning.md에 기록.
+stages:
+  stage1:
+    b_min: 30           # B >= 30
+  stage2:
+    r_min: 15           # stage1 AND R >= 15
+  stage3:
+    g_min: 10           # stage2 AND G >= 10

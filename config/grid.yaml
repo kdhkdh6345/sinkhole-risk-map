@@ -1,0 +1,23 @@
+# 격자 정의 및 감쇠 파라미터
+#
+# 이 파일은 최초 1회 생성 후 변경하려면 사용자 승인이 필요하다.
+# (AGENTS.md 2절 4항: 격자 인덱스 순서 변경 금지)
+
+bbox:
+  lat_min: 37.413
+  lat_max: 37.715
+  lon_min: 126.764
+  lon_max: 127.184
+
+grid_size_m: 500
+expected_count: 2418  # 서울시 경계 교차 후 예상 격자 수 (수용 기준 참고: 2300~2600)
+
+# 감쇠 파라미터 (강수·지하수위·교통 세 채널 공용)
+# 근거: AGENTS.md 6절 "감쇠" 항목
+decay:
+  plateau_hours: 24        # 0~24h: factor = 1.0 (감쇠 없음)
+  tail_hours: 72           # 24~72h: 지수감쇠
+  residual_at_tail: 0.05   # 72h 시점 잔존 비율 (5%)
+  # 계산식: factor(t) = exp(k * (t - plateau_hours))
+  # k = ln(residual_at_tail) / (tail_hours - plateau_hours)
+  # = ln(0.05) / 48 ≈ -0.0624

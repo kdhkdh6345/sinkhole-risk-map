@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sinkhole-risk-map"
+version = "0.1.0"
+description = "서울시 싱크홀 위험도 지도 — 계산 엔진"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.1",
+    "geopandas>=0.14",
+    "pyyaml>=6.0",
+    "requests>=2.31",
+    "pyarrow>=14.0",
+    "shapely>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
