@@ -90,3 +90,16 @@ class AcceleratedClock:
         """
         self._real_start = time.time()
         self._virtual_start = start if start is not None else time.time()
+
+    def set_virtual_time(self, virtual_now: float) -> None:
+        """가상 현재 시각을 지정한 값으로 강제 설정한다.
+
+        테스트 전용: 감쇠 곡선 검증 등 특정 가상 시각에서 상태를 확인할 때 사용.
+        실제 운영 코드에서는 호출하지 않는다.
+
+        Args:
+            virtual_now: 설정할 가상 타임스탬프 (초)
+        """
+        self._real_start = time.time()
+        self._virtual_start = virtual_now
+

@@ -86,7 +86,8 @@ realtime:
 # B >= 30은 잠정값. 전체 격자 점수 분포로 튜닝 후 docs/tuning.md에 기록.
 stages:
   stage1:
-    b_min: 30           # B >= 30
+    b_min: 10           # 잠정값. Phase 2 현재 하수관만 구현(max 20)이므로 10으로 조정.
+                        # 전체 4개 레이어 완성 후 백분위 기준으로 재튜닝. docs/tuning.md 참고.
   stage2:
     r_min: 15           # stage1 AND R >= 15
   stage3:
