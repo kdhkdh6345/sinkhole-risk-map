@@ -251,7 +251,7 @@ function applySimDecay(elapsedH) {
   for (const [idStr, snap] of Object.entries(SNAP_CELLS)) {
     const id = +idStr, sim = SIM_CELLS[id];
     if (!sim) continue;
-    const res = SinkholeEngine.computeAll(sim, elapsedH, GRID_CFG);
+    const res = SinkholeEngine.computeAll(sim, elapsedH, GRID_CFG, WEIGHTS_CFG);
     SNAP_CELLS[id] = { ...snap, ...res, stage: res.stage };
   }
   updateDeckGLLayer();
