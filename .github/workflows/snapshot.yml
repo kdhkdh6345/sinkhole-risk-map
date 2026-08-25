@@ -27,6 +27,10 @@ jobs:
         
     - name: Generate new snapshot
       run: |
+        # Generate base data first
+        python scripts/build_grid.py
+        python scripts/build_baseline.py
+        
         # Generate the latest snapshot for all scenarios
         python scripts/run_snapshot.py
 
