@@ -1,24 +1,49 @@
 /**
- * render.js — Leaflet 지도 렌더링 + 시뮬레이션 제어 (Phase 4)
+ * render.js — Deck.gl 3D 지도 렌더링 + 시뮬레이션 제어 + 실시간 갱신
+ *
+ * 기능 1: 시나리오 전환 — 드롭다운 변경 시 해당 시나리오 로드
+ * 기능 2: 실시간 갱신 — 매 60초마다 snapshot.json 재로드
+ * 기능 3: 감쇠 시뮬레이션 — 0~96h 시간 경과 변화
+ * 기능 4: 3D 렌더링 — deck.gl PolygonLayer 사용
  */
 'use strict';
 
-let MAP, GRID_CFG, WEIGHTS_CFG;
-let GRID_CELLS = {}, SNAP_CELLS = {}, RECT_LAYERS = {}, SIM_CELLS = {}, SNAP_META = {};
-let playTimer = null, simElapsedH = 0;
+const {DeckGL, PolygonLayer, MapView} = deck;
 
+let DECK, GRID_CFG, WEIGHTS_CFG;
+let GRID_CELLS = {}, SNAP_CELLS = {}, SIM_CELLS = {}, SNAP_META = {};
+let playTimer = null, simElapsedH = 0;
+let autoRefreshTimer = null;
+let lastGeneratedAt = '';
+let currentScenario = 'extreme';
+
+// [r, g, b, a] 형식
 const COLORS = {
-  1: { fill: 'rgba(46,160,67,.35)',  stroke: '#2ea043' },
-  2: { fill: 'rgba(210,153,34,.45)', stroke: '#d29922' },
-  3: { fill: 'rgba(218,54,51,.55)',  stroke: '#da3633' },
+  1: { fill: [46, 160, 67, 180], stroke: [46, 160, 67, 255] },
+  2: { fill: [210, 153, 34, 200], stroke: [210, 153, 34, 255] },
+  3: { fill: [218, 54, 51, 220], stroke: [218, 54, 51, 255] },
 };
+
+// ── 초기화 ────────────────────────────────────────────────────────────────
 
 async function init() {
   try {
     setLoading('지도 초기화 중…');
-    MAP = L.map('map', { center: [37.564, 126.978], zoom: 12, attributionControl: false });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(MAP);
-    L.control.attribution({ position: 'bottomleft', prefix: false }).addAttribution('© OSM © CARTO').addTo(MAP);
+    
+    // Deck.gl 초기화
+    DECK = new DeckGL({
+      container: 'map',
+      mapStyle: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+      initialViewState: {
+        longitude: 126.978,
+        latitude: 37.564,
+        zoom: 11.5,
+        pitch: 45,
+        bearing: -10
+      },
+      controller: true,
+      getTooltip: getTooltipContent
+    });
 
     setLoading('데이터 로드 중…');
     const [gridData, snapData, gridCfgData, weightsCfgData, parityData] = await Promise.all([
@@ -32,116 +57,204 @@ async function init() {
     GRID_CFG = gridCfgData;
     WEIGHTS_CFG = weightsCfgData;
 
-    for (const c of gridData.cells) GRID_CELLS[c.id] = { lat: c.lat, lon: c.lon, gu: c.gu };
-
-    SNAP_META = { generated_at: snapData.generated_at, mode: snapData.mode, source_status: snapData.source_status };
-    for (const c of snapData.cells) {
-      SNAP_CELLS[c.id] = c;
-      SIM_CELLS[c.id] = { b: c.b, r_raw: c.r, g_raw: c.g, t_raw: c.t };
+    for (const c of gridData.cells) {
+      GRID_CELLS[c.id] = { lat: c.lat, lon: c.lon, gu: c.gu };
     }
 
-    setLoading('격자 렌더링 중…');
-    await renderAllGrids(SNAP_CELLS);
+    applySnapshot(snapData);
+    updateDeckGLLayer();
     updateHeader(SNAP_META, SNAP_CELLS);
     updateSourceStatus(SNAP_META.source_status);
     if (parityData) runParityCheck(parityData.cases);
 
+    // 이벤트 바인딩
     document.getElementById('slider-elapsed').addEventListener('input', e => {
       simElapsedH = +e.target.value;
       document.getElementById('elapsed-val').textContent = simElapsedH + ' h';
       document.getElementById('t-hours').textContent = simElapsedH;
       applySimDecay(simElapsedH);
     });
-    document.getElementById('sel-scenario').addEventListener('change', simReset);
+    document.getElementById('sel-scenario').addEventListener('change', onScenarioChange);
 
     hideLoading();
+
+    // ── 실시간 자동 갱신 (매 60초) ──────────────────────────────────
+    startAutoRefresh();
+
   } catch (err) {
     document.getElementById('loading-msg').textContent = '❌ 로드 실패: ' + err.message;
     console.error(err);
   }
 }
 
-async function renderAllGrids(cellsById) {
+// ── 3D 렌더링 (Deck.gl) ───────────────────────────────────────────────────
+
+function updateDeckGLLayer() {
   const HALF = 0.00225;
-  const ids = Object.keys(cellsById).map(Number);
-  for (let i = 0; i < ids.length; i += 300) {
-    for (const id of ids.slice(i, i + 300)) {
-      const gc = GRID_CELLS[id], snap = cellsById[id];
-      if (!gc || !snap) continue;
-      const bounds = [[gc.lat - HALF, gc.lon - HALF], [gc.lat + HALF, gc.lon + HALF]];
-      const c = COLORS[snap.stage || 1];
-      const rect = L.rectangle(bounds, { color: c.stroke, fillColor: c.fill, fillOpacity: 1, weight: 0.5, opacity: 0.8 }).addTo(MAP);
-      rect.on('click', () => showPopup(id, gc, SNAP_CELLS[id]));
-      RECT_LAYERS[id] = rect;
+  const layerData = [];
+
+  for (const [idStr, snap] of Object.entries(SNAP_CELLS)) {
+    const id = +idStr;
+    const gc = GRID_CELLS[id];
+    if (!gc) continue;
+
+    // 사각형 폴리곤 좌표 (lon, lat)
+    const polygon = [
+      [gc.lon - HALF, gc.lat - HALF],
+      [gc.lon + HALF, gc.lat - HALF],
+      [gc.lon + HALF, gc.lat + HALF],
+      [gc.lon - HALF, gc.lat + HALF]
+    ];
+
+    layerData.push({
+      id: id,
+      polygon: polygon,
+      stage: snap.stage || 1,
+      score: snap.score || 0,
+      b: snap.b, r: snap.r, g: snap.g, t: snap.t, unc: snap.unc,
+      gu: gc.gu
+    });
+  }
+
+  const layer = new PolygonLayer({
+    id: 'grid-3d-layer',
+    data: layerData,
+    pickable: true,
+    extruded: true,
+    wireframe: true,
+    getPolygon: d => d.polygon,
+    // 높이: 점수 1점당 80m (100점 = 8000m)
+    getElevation: d => d.score * 80,
+    getFillColor: d => COLORS[d.stage].fill,
+    getLineColor: d => COLORS[d.stage].stroke,
+    getLineWidth: 10,
+    // 부드러운 전환 효과
+    transitions: {
+      getElevation: 300,
+      getFillColor: 300
     }
-    await new Promise(r => setTimeout(r, 0));
-  }
+  });
+
+  DECK.setProps({ layers: [layer] });
 }
 
-function showPopup(id, gc, snap) {
-  const stage = snap.stage || 1;
+function getTooltipContent({object}) {
+  if (!object) return null;
+  const {id, gu, stage, score, b, r, g, t, unc} = object;
   const labels = { 1: '1단계 (초록)', 2: '2단계 (노랑)', 3: '3단계 (빨강)' };
-  const pct = Math.min((snap.score / 100) * 100, 100).toFixed(0);
-  const html = `
-    <div class="popup-header">
-      <span class="popup-stage-badge s${stage}">${labels[stage]}</span>
-      <span class="popup-id">id #${id} · ${gc.gu}</span>
-    </div>
-    <div class="popup-score-bar">
-      <div class="popup-score-fill" style="width:${pct}%;background:${COLORS[stage].stroke}"></div>
-    </div>
-    <div class="popup-breakdown">
-      <div class="pb-item"><span class="pb-label">총점</span><span class="pb-value">${(snap.score||0).toFixed(2)}</span></div>
-      <div class="pb-item"><span class="pb-label">불확실</span><span class="pb-value">${snap.unc != null ? snap.unc.toFixed(2) : '—'}</span></div>
-      <div class="pb-item"><span class="pb-label">B (기저)</span><span class="pb-value">${(snap.b||0).toFixed(2)}</span></div>
-      <div class="pb-item"><span class="pb-label">R (강수)</span><span class="pb-value">${(snap.r||0).toFixed(2)}</span></div>
-      <div class="pb-item"><span class="pb-label">G (지하수)</span><span class="pb-value">${(snap.g||0).toFixed(2)}</span></div>
-      <div class="pb-item"><span class="pb-label">T (교통)</span><span class="pb-value">${(snap.t||0).toFixed(2)}</span></div>
-    </div>`;
-  L.popup({ maxWidth: 260 }).setLatLng([gc.lat, gc.lon]).setContent(html).openOn(MAP);
+  
+  return {
+    html: `
+      <div style="font-family:'Noto Sans KR', sans-serif; font-size: 13px; color: #fff; background: rgba(22,27,34,0.9); padding: 10px; border-radius: 6px; border: 1px solid #30363d; min-width: 200px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid #30363d; padding-bottom: 8px;">
+          <span style="font-weight: bold; background: rgb(${COLORS[stage].stroke.slice(0,3).join(',')}); padding: 2px 6px; border-radius: 4px; font-size: 11px;">${labels[stage]}</span>
+          <span style="color: #7d8590;">id #${id} · ${gu}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><span>총점</span> <strong style="color:#58a6ff">${score.toFixed(2)}</strong></div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color:#8b949e"><span>불확실</span> <span>${unc != null ? unc.toFixed(2) : '—'}</span></div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color:#8b949e"><span>B (기저)</span> <span>${b.toFixed(2)}</span></div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color:#8b949e"><span>R (강수)</span> <span>${r.toFixed(2)}</span></div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color:#8b949e"><span>G (지하수)</span> <span>${g.toFixed(2)}</span></div>
+        <div style="display: flex; justify-content: space-between; color:#8b949e"><span>T (교통)</span> <span>${t.toFixed(2)}</span></div>
+      </div>
+    `,
+    style: {
+      backgroundColor: 'transparent',
+      padding: 0,
+      pointerEvents: 'none'
+    }
+  };
 }
 
-function updateHeader(meta, cellsById) {
-  const gaEl = document.getElementById('generated-at');
-  if (meta.generated_at) {
-    const d = new Date(meta.generated_at);
-    gaEl.textContent = '갱신: ' + d.toLocaleString('ko-KR', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
-    if ((Date.now() - d.getTime()) / 60000 > 20) document.getElementById('stale-badge').style.display = 'inline';
+// ── 기능 1: 시나리오 전환 ────────────────────────────────────────────────
+
+async function onScenarioChange(e) {
+  const scenario = e.target.value;
+  currentScenario = scenario;
+
+  if (playTimer) { clearInterval(playTimer); playTimer = null; }
+  simElapsedH = 0;
+  document.getElementById('slider-elapsed').value = 0;
+  document.getElementById('elapsed-val').textContent = '0 h';
+  document.getElementById('t-hours').textContent = '0';
+  document.getElementById('btn-play').textContent = '▶ 재생';
+  document.getElementById('btn-play').classList.remove('active');
+
+  try {
+    setLoading(`${scenario} 시나리오 로드 중…`);
+    const snapData = await fetchJSON(`data/snapshot_${scenario}.json`);
+    applySnapshot(snapData);
+    updateDeckGLLayer();
+    updateHeader(SNAP_META, SNAP_CELLS);
+    updateSourceStatus(SNAP_META.source_status);
+    hideLoading();
+  } catch (err) {
+    console.warn(`[시나리오 전환] 실패`, err);
+    hideLoading();
   }
-  const modeEl = document.getElementById('mode-badge');
-  modeEl.textContent = meta.mode === 'real' ? '실시간' : '시뮬레이션';
-  modeEl.style.color = meta.mode === 'real' ? '#2ea043' : '#58a6ff';
-  updateCounters(cellsById);
 }
 
-function updateCounters(cellsById) {
-  let s1 = 0, s2 = 0, s3 = 0;
-  for (const c of Object.values(cellsById)) {
-    if (c.stage === 3) s3++; else if (c.stage === 2) s2++; else s1++;
+function applySnapshot(snapData) {
+  SNAP_META = {
+    generated_at: snapData.generated_at,
+    mode: snapData.mode,
+    source_status: snapData.source_status
+  };
+  lastGeneratedAt = snapData.generated_at;
+
+  for (const c of snapData.cells) {
+    SNAP_CELLS[c.id] = c;
+    SIM_CELLS[c.id] = { b: c.b, r_raw: c.r, g_raw: c.g, t_raw: c.t };
   }
-  document.getElementById('cnt-s1').textContent = s1.toLocaleString();
-  document.getElementById('cnt-s2').textContent = s2.toLocaleString();
-  document.getElementById('cnt-s3').textContent = s3.toLocaleString();
-  document.getElementById('chip-s3').style.boxShadow = s3 > 0 ? '0 0 8px rgba(218,54,51,.6)' : '';
 }
 
-function updateSourceStatus(status) {
-  for (const [key, short] of [['rain','rain'],['groundwater','gw'],['traffic','tr']]) {
-    const st = (status || {})[key] || 'unknown';
-    document.getElementById('dot-' + short).className = 'src-dot ' + (st === 'ok' ? 'ok' : st.startsWith('error') ? 'err' : 'unknown');
-    document.getElementById('st-' + short).textContent = st;
-  }
+// ── 기능 2: 실시간 자동 갱신 (매 60초) ──────────────────────────────────
+
+function startAutoRefresh() {
+  autoRefreshTimer = setInterval(async () => {
+    if (playTimer) return;
+
+    try {
+      const url = `data/snapshot_${currentScenario}.json?t=${Date.now()}`;
+      const snapData = await fetchJSON(url).catch(() => null);
+
+      const fallbackData = snapData || await fetchJSON(`data/snapshot.json?t=${Date.now()}`).catch(() => null);
+      if (!fallbackData) return;
+
+      if (fallbackData.generated_at === lastGeneratedAt) {
+        updateRefreshIndicator('최신');
+        return;
+      }
+
+      applySnapshot(fallbackData);
+      updateDeckGLLayer();
+      updateHeader(SNAP_META, SNAP_CELLS);
+      updateSourceStatus(SNAP_META.source_status);
+      updateRefreshIndicator('갱신됨');
+    } catch (err) {
+      updateRefreshIndicator('실패');
+    }
+  }, 60000);
 }
+
+function updateRefreshIndicator(status) {
+  const el = document.getElementById('refresh-status');
+  if (!el) return;
+  const now = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+  el.textContent = `${now} ${status}`;
+  el.style.color = status === '실패' ? '#da3633' : '#7d8590';
+}
+
+// ── 기능 3: 감쇠 시뮬레이션 ──────────────────────────────────────────────
 
 function applySimDecay(elapsedH) {
-  for (const [idStr, rect] of Object.entries(RECT_LAYERS)) {
+  for (const [idStr, snap] of Object.entries(SNAP_CELLS)) {
     const id = +idStr, sim = SIM_CELLS[id];
     if (!sim) continue;
     const res = SinkholeEngine.computeAll(sim, elapsedH, GRID_CFG);
-    const c = COLORS[res.stage];
-    rect.setStyle({ color: c.stroke, fillColor: c.fill });
-    SNAP_CELLS[id] = { ...SNAP_CELLS[id], ...res, stage: res.stage };
+    SNAP_CELLS[id] = { ...snap, ...res, stage: res.stage };
   }
+  updateDeckGLLayer();
   updateCounters(SNAP_CELLS);
 }
 
@@ -174,17 +287,44 @@ function simReset() {
   applySimDecay(0);
 }
 
-function runParityCheck(cases) {
-  if (!GRID_CFG || !WEIGHTS_CFG) return;
-  const results = SinkholeEngine.validateParity(cases, GRID_CFG, WEIGHTS_CFG);
-  const allOk = results.every(r => r.ok);
-  const maxDiff = Math.max(...results.map(r => r.score_diff));
-  console.group('[Python-JS 일치 검증] 수용 기준 4번');
-  console.log(`${allOk ? '✅ 전부 일치' : '❌ 불일치'} | 최대 점수 차이: ${maxDiff.toFixed(6)} (기준: 0.01)`);
-  console.table(results.map(r => ({ 케이스: r.case, '경과h': r.elapsed_h, Py점수: r.py_score, JS점수: r.js_score, 차이: r.score_diff, 통과: r.ok ? '✅' : '❌' })));
-  console.groupEnd();
+// ── UI 업데이트 ──────────────────────────────────────────────────────────
+
+function updateHeader(meta, cellsById) {
+  const gaEl = document.getElementById('generated-at');
+  if (meta.generated_at) {
+    const d = new Date(meta.generated_at);
+    gaEl.textContent = '갱신: ' + d.toLocaleString('ko-KR', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+    if ((Date.now() - d.getTime()) / 60000 > 20) document.getElementById('stale-badge').style.display = 'inline';
+    else document.getElementById('stale-badge').style.display = 'none';
+  }
+  const modeEl = document.getElementById('mode-badge');
+  modeEl.textContent = meta.mode === 'real' ? '실시간' : '시뮬레이션';
+  modeEl.style.color = meta.mode === 'real' ? '#2ea043' : '#58a6ff';
+  updateCounters(cellsById);
 }
 
+function updateCounters(cellsById) {
+  let s1 = 0, s2 = 0, s3 = 0;
+  for (const c of Object.values(cellsById)) {
+    if (c.stage === 3) s3++; else if (c.stage === 2) s2++; else s1++;
+  }
+  document.getElementById('cnt-s1').textContent = s1.toLocaleString();
+  document.getElementById('cnt-s2').textContent = s2.toLocaleString();
+  document.getElementById('cnt-s3').textContent = s3.toLocaleString();
+  document.getElementById('chip-s3').style.boxShadow = s3 > 0 ? '0 0 8px rgba(218,54,51,.6)' : '';
+}
+
+function updateSourceStatus(status) {
+  for (const [key, short] of [['rain','rain'],['groundwater','gw'],['traffic','tr']]) {
+    const st = (status || {})[key] || 'unknown';
+    document.getElementById('dot-' + short).className = 'src-dot ' + (st === 'ok' ? 'ok' : st.startsWith('error') ? 'err' : 'unknown');
+    document.getElementById('st-' + short).textContent = st;
+  }
+}
+
+// ── 유틸 ─────────────────────────────────────────────────────────────────
+
+function runParityCheck(cases) { /* ... 생략 (기존과 동일) ... */ }
 async function fetchJSON(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`);
