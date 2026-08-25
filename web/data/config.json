@@ -1,0 +1,139 @@
+{
+  "weights": {
+    "static": {
+      "sewer": {
+        "max": 20
+      },
+      "borehole": {
+        "max": 15
+      },
+      "history": {
+        "max": 15
+      },
+      "liquefaction": {
+        "max": 10,
+        "values": {
+          "high": 1.0,
+          "medium": 0.6,
+          "low": 0.2
+        }
+      }
+    },
+    "realtime": {
+      "rain": {
+        "max": 25,
+        "thresholds": [
+          {
+            "name": "precaution",
+            "score": 10,
+            "conditions": {
+              "any": [
+                {
+                  "window_h": 1,
+                  "mm": 20
+                },
+                {
+                  "window_h": 3,
+                  "mm": 40
+                }
+              ]
+            }
+          },
+          {
+            "name": "advisory",
+            "score": 15,
+            "conditions": {
+              "any": [
+                {
+                  "window_h": 3,
+                  "mm": 60
+                },
+                {
+                  "window_h": 12,
+                  "mm": 110
+                }
+              ]
+            }
+          },
+          {
+            "name": "warning",
+            "score": 20,
+            "conditions": {
+              "any": [
+                {
+                  "window_h": 3,
+                  "mm": 90
+                },
+                {
+                  "window_h": 12,
+                  "mm": 180
+                }
+              ]
+            }
+          },
+          {
+            "name": "extreme",
+            "score": 25,
+            "conditions": {
+              "any": [
+                {
+                  "all": [
+                    {
+                      "window_h": 1,
+                      "mm": 50
+                    },
+                    {
+                      "window_h": 3,
+                      "mm": 90
+                    }
+                  ]
+                },
+                {
+                  "window_h": 1,
+                  "mm": 72
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "groundwater": {
+        "max": 10,
+        "sigma1_score": 5,
+        "sigma2_score": 10,
+        "min_rain_for_g": 15,
+        "consecutive_obs": 2
+      },
+      "traffic": {
+        "max": 5
+      }
+    },
+    "stages": {
+      "stage1": {
+        "b_min": 10
+      },
+      "stage2": {
+        "r_min": 15
+      },
+      "stage3": {
+        "g_min": 10
+      }
+    }
+  },
+  "decay": {
+    "plateau_hours": 24,
+    "tail_hours": 72,
+    "residual_at_tail": 0.05
+  },
+  "stages": {
+    "stage1": {
+      "b_min": 10
+    },
+    "stage2": {
+      "r_min": 15
+    },
+    "stage3": {
+      "g_min": 10
+    }
+  }
+}

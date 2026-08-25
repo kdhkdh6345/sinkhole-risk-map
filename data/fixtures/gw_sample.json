@@ -1,0 +1,23 @@
+{
+    "status": "OK",
+    "stations": [
+        {
+            "station_id": "GW_GANGNAM_01",
+            "lat": 37.5,
+            "lon": 127.05,
+            "level_m": 12.5
+        },
+        {
+            "station_id": "GW_SEOCHO_01",
+            "lat": 37.48,
+            "lon": 127.02,
+            "level_m": 11.0
+        },
+        {
+            "station_id": "GW_JONGNO_01",
+            "lat": 37.58,
+            "lon": 126.98,
+            "level_m": 22.0
+        }
+    ]
+}

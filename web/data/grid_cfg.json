@@ -1,0 +1,15 @@
+{
+  "bbox": {
+    "lat_min": 37.413,
+    "lat_max": 37.715,
+    "lon_min": 126.764,
+    "lon_max": 127.184
+  },
+  "grid_size_m": 500,
+  "expected_count": 2418,
+  "decay": {
+    "plateau_hours": 24,
+    "tail_hours": 72,
+    "residual_at_tail": 0.05
+  }
+}

@@ -112,9 +112,14 @@ def main() -> int:
         gw_adapter = SimulatedGroundwaterAdapter(scenario=args.scenario)
         traffic_adapter = SimulatedTrafficAdapter()
     else:
-        # Phase 6에서 실제 어댑터로 교체 — 엔진 코드 수정 없음
-        print("❌ real 모드는 Phase 6에서 구현됩니다.")
-        return 1
+        # Phase 6-1, 6-2, 6-3: 기상청 강수량 & 지하수위 & 교통량 연동 완비
+        from sinkhole.sources.kma import KmaRainfallSource
+        from sinkhole.sources.groundwater import SeoulGroundwaterSource
+        from sinkhole.sources.traffic import SeoulTrafficSource
+        
+        rain_adapter = KmaRainfallSource()
+        gw_adapter = SeoulGroundwaterSource()
+        traffic_adapter = SeoulTrafficSource()
 
     t_start = time.perf_counter()
     field.update(rain_adapter, gw_adapter, traffic_adapter)
@@ -165,8 +170,12 @@ def main() -> int:
     import json
     import tempfile
     import os
+    from export_config import export_config
 
     SNAPSHOT_JSON.parent.mkdir(parents=True, exist_ok=True)
+    
+    # 설정 파일(config.json)도 함께 업데이트
+    export_config()
     # temp → rename 패턴: 계산 성공 시에만 기존 파일 교체
     tmp_path = SNAPSHOT_JSON.with_suffix(".json.tmp")
     try:
