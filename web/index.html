@@ -6,8 +6,8 @@
   <title>서울시 싱크홀 위험도 실시간 지도</title>
   <meta name="description" content="서울시 500m 격자 단위 싱크홀(지반침하) 위험도를 실시간으로 표시하는 지도입니다. 강수량·지하수위·교통·지반 데이터를 종합해 1·2·3단계로 위험도를 산정합니다." />
 
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- MapLibre GL CSS (deck.gl Base Map) -->
+  <link href="https://unpkg.com/maplibre-gl@3.0.0/dist/maplibre-gl.css" rel="stylesheet" />
 
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -279,6 +279,7 @@
     <span id="generated-at">데이터 로드 중…</span>
     <span id="stale-badge">갱신 지연</span>
     <span id="mode-badge">—</span>
+    <span id="refresh-status" style="font-size:.7rem;color:#7d8590;margin-left:8px">자동 갱신 대기</span>
   </div>
   <div id="stage-counters">
     <div class="stage-chip s1" id="chip-s1"><div class="dot"></div><span id="cnt-s1">—</span></div>
@@ -345,8 +346,9 @@
 
 </aside>
 
-<!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- MapLibre & Deck.gl JS -->
+<script src="https://unpkg.com/maplibre-gl@3.0.0/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/deck.gl@8.9.3/dist.min.js"></script>
 <!-- 감쇠·점수화 엔진 (Python 동일 로직) -->
 <script src="js/sim.js"></script>
 <!-- 지도 렌더링 -->

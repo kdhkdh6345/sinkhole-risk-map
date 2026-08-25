@@ -106,9 +106,15 @@ class SimulatedGroundwaterAdapter(GroundwaterSourceAdapter):
         n = len(grid_df)
         sigma = np.zeros(n, dtype=np.float64)
 
-        if self._scenario in ("calm", "heavy_rain"):
+        if self._scenario == "calm":
             # 지하수위 정상 → 이상 없음
             pass
+
+        elif self._scenario == "heavy_rain":
+            # 강남4구 일대 소폭 급락 → G = 5 (1σ 하강)
+            for i, gu in enumerate(grid_df["gu"]):
+                if gu in _HEAVY_RAIN_DISTRICTS:
+                    sigma[i] = -1.2  # 1.2σ 급락
 
         elif self._scenario == "extreme":
             # 2σ 이상 급락 → G = 10 (단, R >= 15 조건 별도 체크)
