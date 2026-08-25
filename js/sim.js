@@ -68,13 +68,13 @@ const SinkholeEngine = (() => {
     return 1;
   }
 
-  function computeAll(cell, elapsedH, cfg) {
-    const factor = decayFactor(elapsedH, cfg);
+  function computeAll(cell, elapsedH, gridCfg, weightsCfg) {
+    const factor = decayFactor(elapsedH, gridCfg);
     const r = cell.r_raw * factor;
     const g = cell.g_raw * factor;
     const t = cell.t_raw * factor;
     const score = Math.min(cell.b + r + g + t, 100);
-    return { score, stage: computeStage(cell.b, r, g, cfg), r, g, t, b: cell.b };
+    return { score, stage: computeStage(cell.b, r, g, weightsCfg), r, g, t, b: cell.b };
   }
 
   function validateParity(cases, gridCfg, weightsCfg) {
