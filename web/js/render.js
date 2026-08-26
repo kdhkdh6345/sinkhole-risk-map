@@ -8,16 +8,24 @@
  */
 'use strict';
 
-const {DeckGL, PolygonLayer, GeoJsonLayer, MapView} = deck;
+const {DeckGL, PolygonLayer, GeoJsonLayer, MapView, PathLayer, ScatterplotLayer} = deck;
 
 let DECK, GRID_CFG, WEIGHTS_CFG;
-let GRID_CELLS = {}, SNAP_CELLS = {}, SIM_CELLS = {}, SNAP_META = {};
+let GRID_CELLS = {}, SNAP_CELLS = {}, SIM_CELLS = {}, HISTORY_DATA = {}, SNAP_META = {};
+let DONG_GEOJSON = null, DONG_HISTORY = {};
+let NATIONWIDE_GEOJSON = null, PIPES_GEOJSON = null, COMPLAINTS_DATA = null;
+
+let activeLayers = {
+  nationwide: false,
+  dong: true,
+  pipes: true,
+  complaints: true,
+  points: false
+};
 let playTimer = null, simElapsedH = 0;
 let autoRefreshTimer = null;
 let lastGeneratedAt = '';
 let currentScenario = 'calm';
-let HISTORY_DATA = {};
-let DONG_GEOJSON = null, DONG_HISTORY = {};
 let historyMode = 'off'; // 'off' | 'points' | 'dong'
 
 // [r, g, b, a] 형식
@@ -49,7 +57,7 @@ async function init() {
     });
 
     setLoading('데이터 로드 중…');
-    const [gridData, snapData, gridCfgData, weightsCfgData, parityData, historyData, dongGeoJson, dongHistory] = await Promise.all([
+    const [gridData, snapData, gridCfgData, weightsCfgData, parityData, historyData, dongGeoJson, dongHistory, nationwideGeoJson, pipesGeoJson, complaintsData] = await Promise.all([
       fetchJSON(`data/grid.json?t=${Date.now()}`),
       fetchJSON(`data/snapshot_calm.json?t=${Date.now()}`),
       fetchJSON(`data/grid_cfg.json?t=${Date.now()}`),
@@ -57,7 +65,10 @@ async function init() {
       fetchJSON(`data/parity.json?t=${Date.now()}`).catch(() => null),
       fetchJSON(`data/history.json?t=${Date.now()}`).catch(() => ({})),
       fetchJSON(`data/seoul_dong.geojson?t=${Date.now()}`).catch(() => null),
-      fetchJSON(`data/dong_history.json?t=${Date.now()}`).catch(() => ({}))
+      fetchJSON(`data/dong_history.json?t=${Date.now()}`).catch(() => ({})),
+      fetchJSON(`https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea_provinces_geo_simple.json`).catch(() => null),
+      fetchJSON(`data/mock_pipes.geojson?t=${Date.now()}`).catch(() => null),
+      fetchJSON(`data/mock_complaints.json?t=${Date.now()}`).catch(() => null)
     ]);
 
     GRID_CFG = gridCfgData;
@@ -65,6 +76,9 @@ async function init() {
     if (historyData) HISTORY_DATA = historyData;
     if (dongGeoJson) DONG_GEOJSON = dongGeoJson;
     if (dongHistory) DONG_HISTORY = dongHistory;
+    if (nationwideGeoJson) NATIONWIDE_GEOJSON = nationwideGeoJson;
+    if (pipesGeoJson) PIPES_GEOJSON = pipesGeoJson;
+    if (complaintsData) COMPLAINTS_DATA = complaintsData;
 
     for (const c of gridData.cells) {
       GRID_CELLS[c.id] = { lat: c.lat, lon: c.lon, gu: c.gu };
@@ -172,12 +186,11 @@ function updateDeckGLLayer() {
   const layers = [];
   
   // 동별 보기 모드일 때는 격자(큐브)를 숨겨서 동별 지도가 잘 보이게 함
-  if (historyMode !== 'dong') {
-    layers.push(layer);
-  }
+  // 3D 큐브와 동별 맵이 모두 공존할 수 있도록 항상 표시 (또는 토글 추가 가능)
+  layers.push(layer);
 
   // 동별 보기 모드일 때 GeoJsonLayer 추가
-  if (historyMode === 'dong' && DONG_GEOJSON) {
+  if (activeLayers.dong && DONG_GEOJSON) {
     const dongColors = {
       1: [46, 160, 67, 100],   // 0건: 안전 (파란/초록색)
       2: [168, 204, 30, 150],  // 1건: 노란초록
@@ -206,12 +219,57 @@ function updateDeckGLLayer() {
     layers.push(dongLayer);
   }
 
+
+  if (activeLayers.nationwide && NATIONWIDE_GEOJSON) {
+    layers.push(new GeoJsonLayer({
+      id: 'nationwide-layer',
+      data: NATIONWIDE_GEOJSON,
+      stroked: true,
+      filled: false,
+      getLineColor: [100, 100, 100, 150],
+      getLineWidth: 2,
+      lineWidthMinPixels: 2
+    }));
+  }
+
+  if (activeLayers.pipes && PIPES_GEOJSON) {
+    layers.push(new GeoJsonLayer({
+      id: 'pipes-layer',
+      data: PIPES_GEOJSON,
+      stroked: true,
+      filled: false,
+      getLineColor: d => d.properties.type === 'subway' ? [0, 150, 255, 200] : [255, 100, 0, 200],
+      getLineWidth: d => d.properties.type === 'subway' ? 50 : 20,
+      lineWidthMinPixels: 3,
+      pickable: true,
+      onClick: handleGridClick
+    }));
+  }
+
+  if (activeLayers.complaints && COMPLAINTS_DATA) {
+    layers.push(new ScatterplotLayer({
+      id: 'complaints-layer',
+      data: COMPLAINTS_DATA,
+      getPosition: d => [d.lng, d.lat],
+      getFillColor: d => d.urgency === 3 ? [255, 0, 0, 200] : (d.urgency === 2 ? [255, 150, 0, 200] : [255, 255, 0, 200]),
+      getRadius: 100,
+      radiusMinPixels: 5,
+      pickable: true,
+      onClick: handleGridClick
+    }));
+  }
+
   DECK.setProps({ layers: layers });
+
 }
 
-window.toggleHistory = () => {
-  const radio = document.querySelector('input[name="history_mode"]:checked');
-  historyMode = radio ? radio.value : 'off';
+window.toggleLayers = () => {
+  activeLayers.nationwide = document.getElementById('chk-layer-nationwide').checked;
+  activeLayers.dong = document.getElementById('chk-layer-dong').checked;
+  activeLayers.pipes = document.getElementById('chk-layer-pipes').checked;
+  activeLayers.complaints = document.getElementById('chk-layer-complaints').checked;
+  activeLayers.points = document.getElementById('chk-layer-points').checked;
+  historyMode = activeLayers.points ? 'points' : 'off';
   updateDeckGLLayer();
 };
 
@@ -231,6 +289,12 @@ window.changeMapTheme = () => {
 function getTooltipContent({object, layer}) {
   if (!object) return null;
 
+  if (layer && layer.id === 'pipes-layer') {
+    return { html: `<div style="padding: 10px; background: rgba(0,0,0,0.8); color: white; border-radius: 4px;">📍 ${object.properties.name} (${object.properties.type})</div>` };
+  }
+  if (layer && layer.id === 'complaints-layer') {
+    return { html: `<div style="padding: 10px; background: rgba(0,0,0,0.8); color: white; border-radius: 4px;">⚠️ 민원 접수: ${object.type}<br>긴급도: ${object.urgency}단계</div>` };
+  }
   if (layer && layer.id === 'dong-geojson-layer') {
     const dongName = object.properties.adm_nm;
     const history = DONG_HISTORY[dongName] || { count: 0, grade: 1 };
@@ -484,7 +548,13 @@ function handleGridClick(info) {
   document.getElementById('llm-output').innerHTML = '작성 시작을 눌러주세요.';
   document.getElementById('llm-output').style.color = '#8b949e';
   
-  if (info.layer.id === 'dong-geojson-layer') {
+  if (info.layer.id === 'pipes-layer') {
+    selectedGridInfo = { type: 'pipe', name: info.object.properties.name, ptype: info.object.properties.type };
+    document.getElementById('llm-target-info').innerHTML = `📍 <b>${selectedGridInfo.name}</b> (노후도/안전 등급 분석)`;
+  } else if (info.layer.id === 'complaints-layer') {
+    selectedGridInfo = { type: 'complaint', name: info.object.type, urgency: info.object.urgency };
+    document.getElementById('llm-target-info').innerHTML = `📍 <b>주민 민원</b>: ${selectedGridInfo.name} (긴급도 ${selectedGridInfo.urgency})`;
+  } else if (info.layer.id === 'dong-geojson-layer') {
     const dongName = info.object.properties.adm_nm;
     const history = DONG_HISTORY[dongName] || { count: 0, grade: 1 };
     selectedGridInfo = { type: 'dong', name: dongName, grade: history.grade, count: history.count };
@@ -513,7 +583,15 @@ function generateLlmDraft() {
   if (llmTypingInterval) clearInterval(llmTypingInterval);
   
   let draftText = '';
-  if (selectedGridInfo.type === 'dong') {
+  if (selectedGridInfo.type === 'pipe') {
+    draftText = `[안전안내문자]
+최근 ${selectedGridInfo.name} 주변 노후 인프라(관로/지하철)에서 지반 침하 위험이 분석되었습니다.
+해당 구간 통행 시 우회해 주시고 지반 이상 징후 발견 시 120으로 즉시 신고 바랍니다.`;
+  } else if (selectedGridInfo.type === 'complaint') {
+    draftText = `[긴급안내문자]
+인근 지역에 '${selectedGridInfo.name}' 민원이 다수 접수되어 지반 침하 및 포트홀 위험이 있습니다.
+사고 예방을 위해 해당 도로 진입을 자제해 주시기 바랍니다.`;
+  } else if (selectedGridInfo.type === 'dong') {
     if (selectedGridInfo.count >= 3) {
       draftText = `[안전안내문자]\n최근 ${selectedGridInfo.name} 일대에 지반 침하 이력이 다수 보고되었습니다.\n차량 운행 시 서행하시고, 도로 갈라짐 발견 시 120으로 즉시 신고 바랍니다.`;
     } else {

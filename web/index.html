@@ -377,15 +377,17 @@
     </div>
   </div>
 
-  <!-- 과거 발생 이력 표시 -->
+  <!-- 다중 레이어 토글 -->
   <div class="panel-card">
     <div class="toggle-history">
-      <span style="font-size: .85rem; font-weight: bold;">과거 발생 구역 표시</span>
+      <span style="font-size: .85rem; font-weight: bold;">지도 레이어 설정</span>
     </div>
     <div style="margin-top: 8px; font-size: 0.8rem; display: flex; flex-direction: column; gap: 6px;">
-      <label style="cursor: pointer;"><input type="radio" name="history_mode" value="off" checked onchange="toggleHistory()"> 표시 끄기</label>
-      <label style="cursor: pointer;"><input type="radio" name="history_mode" value="points" onchange="toggleHistory()"> 점(기둥)으로 보기 (격자기반)</label>
-      <label style="cursor: pointer;"><input type="radio" name="history_mode" value="dong" onchange="toggleHistory()"> 동별 위험도로 보기 (방법론)</label>
+      <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-nationwide" onchange="toggleLayers()"> 전국 시·도 개요 보기</label>
+      <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-dong" onchange="toggleLayers()" checked> 서울시 동별 위험도 히트맵</label>
+      <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-pipes" onchange="toggleLayers()" checked> 지하철 노선도 / 상하수도 노후 관로</label>
+      <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-complaints" onchange="toggleLayers()" checked> 최근 민원 발생 위치 핀(Pin)</label>
+      <label style="cursor: pointer; color: #8b949e;"><input type="checkbox" id="chk-layer-points" onchange="toggleLayers()"> (기존) 과거 사고 이력 기둥</label>
     </div>
   </div>
 
@@ -411,9 +413,9 @@
 <script src="https://unpkg.com/maplibre-gl@3.0.0/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/deck.gl@8.9.3/dist.min.js"></script>
 <!-- 감쇠·점수화 엔진 (Python 동일 로직) -->
-<script src="js/sim.js?v=8"></script>
+<script src="js/sim.js?v=9"></script>
 <!-- 지도 렌더링 -->
-<script src="js/render.js?v=8"></script>
+<script src="js/render.js?v=9"></script>
 
 </body>
 </html>
