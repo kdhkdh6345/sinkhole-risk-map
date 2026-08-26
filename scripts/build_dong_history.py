@@ -44,13 +44,13 @@ def main():
 
     for adm_nm, data in dong_result.items():
         c = data["count"]
-        if c == 0:
+        if c <= 2:
             data["grade"] = 1
-        elif c == 1:
+        elif c <= 5:
             data["grade"] = 2
-        elif c == 2:
+        elif c <= 8:
             data["grade"] = 3
-        elif c == 3:
+        elif c <= 12:
             data["grade"] = 4
         else:
             data["grade"] = 5
