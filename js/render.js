@@ -603,7 +603,7 @@ function generateLlmDraft() {
 사고 예방을 위해 해당 도로 진입을 자제해 주시기 바랍니다.`;
   } else if (selectedGridInfo.type === 'dong') {
     if (selectedGridInfo.count >= 3) {
-      draftText = `[안전안내문자]\n최근 ${selectedGridInfo.name} 일대에 지반 침하 이력이 다수 보고되었습니다.\n차량 운행 시 서행하시고, 도로 갈라짐 발견 시 120으로 즉시 신고 바랍니다.`;
+      draftText = `[안전안내문자]\n최근 ${selectedGridInfo.name} 일대에 지반 침하 이력이 다수 보고되었습니다.\n인근 차량 우회 및 보행자 안전에 유의하시고, 도로 갈라짐 발견 시 120으로 즉시 신고 바랍니다.`;
     } else {
       draftText = `[안전안내문자]\n현재 ${selectedGridInfo.name} 주변은 지반 상태가 비교적 양호합니다.\n안전한 통행 되시길 바랍니다. (정기 점검 중)`;
     }
