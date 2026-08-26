@@ -198,6 +198,19 @@ window.toggleHistory = () => {
   updateDeckGLLayer();
 };
 
+window.changeMapTheme = () => {
+  const radio = document.querySelector('input[name="map_theme"]:checked');
+  const theme = radio ? radio.value : 'dark';
+  
+  const styleUrl = theme === 'light' 
+    ? 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json'
+    : 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+    
+  if (DECK) {
+    DECK.setProps({ mapStyle: styleUrl });
+  }
+};
+
 function getTooltipContent({object, layer}) {
   if (!object) return null;
 
