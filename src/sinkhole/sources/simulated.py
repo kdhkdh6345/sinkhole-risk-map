@@ -19,8 +19,8 @@ import pandas as pd
 
 from .base import GroundwaterSourceAdapter, RainSourceAdapter, TrafficSourceAdapter
 
-# 시나리오별 강수 집중 자치구
-_HEAVY_RAIN_DISTRICTS = {"강남구", "서초구", "송파구", "강동구"}
+# 시나리오별 강수 집중 자치구 (기저점수가 높은 곳 위주로 배치하여 UI에서 식별 가능하도록 수정)
+_HEAVY_RAIN_DISTRICTS = {"영등포구", "도봉구", "구로구", "성동구"}
 _EXTREME_DISTRICTS = {"종로구", "용산구", "성북구", "중구", "마포구"}
 
 # 교통 부하 높은 자치구 (정적 프록시 — 도로 등급·버스노선 밀도 기반)
