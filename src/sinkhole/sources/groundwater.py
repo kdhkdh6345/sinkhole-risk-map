@@ -125,7 +125,8 @@ class SeoulGroundwaterSource(GroundwaterSourceAdapter):
     def _compute_sigma(
         self, station_id: str, current_level: float
     ) -> float | None:
-        """관측정 30일 이력 기반 σ 이상도를 반환한다.
+        """관측정 30일 이력을 1D 칼만 필터(Kalman Filter) 상태공간 모델에 통과시켜
+        예측 잔차(Residual) 기반의 σ 이상도를 반환한다.
 
         Returns:
             σ 이상도. None이면 이력 부족.
@@ -142,11 +143,39 @@ class SeoulGroundwaterSource(GroundwaterSourceAdapter):
             return None  # 이력 부족
 
         arr = np.array(levels, dtype=np.float64)
-        mean, std = arr.mean(), arr.std()
-        if std < 1e-6:
+        
+        # 1D Kalman Filter 초기화
+        x_hat = arr[0]  # 상태 추정치 (초기값은 첫 관측치)
+        p = 1.0         # 추정 오차 공분산
+        q = 0.05        # 프로세스 노이즈 분산 (추세 변화 수용도)
+        r = 0.5         # 측정 노이즈 분산 (센서 오차 수용도)
+
+        # 과거 이력 순차 학습
+        for z in arr[1:]:
+            # 예측 (Prediction)
+            x_pred = x_hat
+            p_pred = p + q
+            
+            # 업데이트 (Update)
+            k = p_pred / (p_pred + r)  # 칼만 이득(Kalman Gain)
+            x_hat = x_pred + k * (z - x_pred)
+            p = (1 - k) * p_pred
+
+        # 현재 수위(current_level)에 대한 다음 시점 예측
+        x_pred_next = x_hat
+        p_pred_next = p + q
+
+        # 잔차(Residual) 계산: 실제 관측치 - 예측치
+        residual = current_level - x_pred_next
+        
+        # 잔차의 표준편차 (예측 불확실성 + 측정 노이즈)
+        residual_std = np.sqrt(p_pred_next + r)
+
+        if residual_std < 1e-6:
             return 0.0
 
-        return (current_level - mean) / std
+        # Z-Score 형태의 이상도 반환
+        return float(residual / residual_std)
 
     # ── 연속 조건 판정 ────────────────────────────────────────────────────
     def _check_consecutive(self, station_id: str, sigma: float) -> bool:
