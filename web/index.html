@@ -366,6 +366,17 @@
     <div id="time-display">가상 시각: +<span id="t-hours">0</span>h</div>
   </div>
 
+  <!-- 지도 테마 설정 -->
+  <div class="panel-card">
+    <div class="toggle-history">
+      <span style="font-size: .85rem; font-weight: bold;">지도 배경 테마</span>
+    </div>
+    <div style="margin-top: 8px; font-size: 0.8rem; display: flex; gap: 10px;">
+      <label style="cursor: pointer;"><input type="radio" name="map_theme" value="dark" checked onchange="changeMapTheme()"> 다크 모드 (기본)</label>
+      <label style="cursor: pointer;"><input type="radio" name="map_theme" value="light" onchange="changeMapTheme()"> 라이트 모드 (네이버 맵 스타일)</label>
+    </div>
+  </div>
+
   <!-- 과거 발생 이력 표시 -->
   <div class="panel-card">
     <div class="toggle-history">
