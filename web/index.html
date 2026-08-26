@@ -106,13 +106,24 @@
     .leaflet-container { background: #1a1f2e !important; }
 
     /* ── 우측 패널 ────────────────────────────────────────────────────── */
-    #side-panel {
+    #left-panel, #right-panel {
       position: fixed;
-      top: calc(var(--header-h) + 12px); right: 12px;
+      top: calc(var(--header-h) + 12px);
       width: var(--panel-w); z-index: 900;
       display: flex; flex-direction: column; gap: 10px;
-      pointer-events: none;
+      pointer-events: auto; /* Let scroll events pass through empty space */
+      max-height: calc(100vh - var(--header-h) - 24px);
+      overflow-y: auto;
     }
+    #left-panel::-webkit-scrollbar, #right-panel::-webkit-scrollbar {
+      width: 4px;
+    }
+    #left-panel::-webkit-scrollbar-thumb, #right-panel::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.2);
+      border-radius: 2px;
+    }
+    #left-panel { left: 12px; }
+    #right-panel { right: 12px; }
     .panel-card {
       background: rgba(22,27,34,.92);
       backdrop-filter: blur(12px);
@@ -245,13 +256,16 @@
     /* ── 반응형 (모바일 375px) ───────────────────────────────────────── */
     @media (max-width: 600px) {
       :root { --panel-w: calc(100vw - 24px); }
-      #side-panel {
+      #left-panel, #right-panel {
         top: auto; bottom: 12px; right: 12px; left: 12px;
         width: auto;
-        flex-direction: row; overflow-x: auto;
+        flex-direction: row; overflow-x: auto; overflow-y: hidden;
         flex-wrap: nowrap;
         gap: 8px;
+        max-height: 25vh;
+        pointer-events: auto;
       }
+      #left-panel { bottom: calc(25vh + 24px); } /* 좌측 패널을 모바일에서 위로 올림 */
       .panel-card { min-width: 220px; flex-shrink: 0; }
       #stage-counters { display: none; }
     }
@@ -312,29 +326,8 @@
 <!-- 지도 -->
 <div id="map"></div>
 
-<!-- 우측 패널 -->
-<aside id="side-panel">
-
-  <!-- 범례 -->
-  <div class="panel-card">
-    <h3>위험도 단계</h3>
-    <div class="legend-item">
-      <div class="legend-swatch" style="background:var(--stage1-fill);border-color:var(--stage1-color)"></div>
-      <span>1단계 — 기저 주의</span>
-      <span class="cond">B≥10</span>
-    </div>
-    <div class="legend-item">
-      <div class="legend-swatch" style="background:var(--stage2-fill);border-color:var(--stage2-color)"></div>
-      <span>2단계 — 강수 경보</span>
-      <span class="cond">+R≥15</span>
-    </div>
-    <div class="legend-item">
-      <div class="legend-swatch" style="background:var(--stage3-fill);border-color:var(--stage3-color)"></div>
-      <span>3단계 — 극한 위험</span>
-      <span class="cond">+G≥10</span>
-    </div>
-  </div>
-
+<!-- 좌측 패널 -->
+<aside id="left-panel">
   <!-- 소스 상태 -->
   <div class="panel-card">
     <h3>데이터 소스</h3>
@@ -390,6 +383,29 @@
       <label style="cursor: pointer; color: #8b949e;"><input type="checkbox" id="chk-layer-points" onchange="toggleLayers()"> (기존) 과거 사고 이력 기둥</label>
     </div>
   </div>
+</aside>
+
+<!-- 우측 패널 -->
+<aside id="right-panel">
+  <!-- 범례 -->
+  <div class="panel-card">
+    <h3>위험도 단계</h3>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background:var(--stage1-fill);border-color:var(--stage1-color)"></div>
+      <span>1단계 — 기저 주의</span>
+      <span class="cond">B≥10</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background:var(--stage2-fill);border-color:var(--stage2-color)"></div>
+      <span>2단계 — 강수 경보</span>
+      <span class="cond">+R≥15</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background:var(--stage3-fill);border-color:var(--stage3-color)"></div>
+      <span>3단계 — 극한 위험</span>
+      <span class="cond">+G≥10</span>
+    </div>
+  </div>
 
   <!-- 재난 문자 자동 생성 (숨김 기본) -->
   <div class="panel-card" id="llm-panel" style="display: none; border-color: #a371f7;">
@@ -406,7 +422,6 @@
       <button class="btn" id="btn-approve-llm" onclick="approveLlmDraft()" style="background: #2ea043; color: #fff; border: none; font-weight: bold; opacity: 0.5; pointer-events: none;">승인/발송</button>
     </div>
   </div>
-
 </aside>
 
 <!-- MapLibre & Deck.gl JS -->
