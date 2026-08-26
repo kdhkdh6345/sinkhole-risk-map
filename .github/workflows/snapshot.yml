@@ -1,6 +1,9 @@
 name: Update Real-time Risk Snapshot
 
 on:
+  push:
+    branches:
+      - main
   schedule:
     - cron: '* * * * *' # Run every minute
   workflow_dispatch: # Allow manual trigger
