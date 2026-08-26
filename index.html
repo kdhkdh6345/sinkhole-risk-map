@@ -255,6 +255,27 @@
       .panel-card { min-width: 220px; flex-shrink: 0; }
       #stage-counters { display: none; }
     }
+    
+    /* 과거 이력 토글 스위치 */
+    .toggle-history {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 5px;
+    }
+    .switch {
+      position: relative; display: inline-block; width: 40px; height: 20px;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+      background-color: var(--bg-card2); border: 1px solid var(--border);
+      transition: .4s; border-radius: 20px;
+    }
+    .slider:before {
+      position: absolute; content: ""; height: 14px; width: 14px; left: 2px; bottom: 2px;
+      background-color: var(--text-muted); transition: .4s; border-radius: 50%;
+    }
+    input:checked + .slider { background-color: rgba(163, 113, 247, 0.2); border-color: #a371f7; }
+    input:checked + .slider:before { transform: translateX(20px); background-color: #a371f7; }
   </style>
 </head>
 <body>
@@ -328,9 +349,9 @@
     <div class="sim-row">
       <label>시나리오</label>
       <select id="sel-scenario">
-        <option value="calm">평시 (calm)</option>
+        <option value="calm" selected>평시 (calm)</option>
         <option value="heavy_rain">호우경보 (heavy_rain)</option>
-        <option value="extreme" selected>극한호우 (extreme)</option>
+        <option value="extreme">극한호우 (extreme)</option>
       </select>
     </div>
     <div class="sim-row">
@@ -342,6 +363,17 @@
       <button class="btn" id="btn-play" onclick="simToggle()">▶ 재생</button>
     </div>
     <div id="time-display">가상 시각: +<span id="t-hours">0</span>h</div>
+  </div>
+
+  <!-- 과거 발생 이력 표시 -->
+  <div class="panel-card">
+    <div class="toggle-history">
+      <span style="font-size: .85rem;">과거 발생 구역 표시</span>
+      <label class="switch">
+        <input type="checkbox" id="chk-history" onchange="toggleHistory()">
+        <span class="slider"></span>
+      </label>
+    </div>
   </div>
 
 </aside>
