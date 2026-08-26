@@ -17,7 +17,7 @@ cell_ids = [c['id'] for c in cells]
 
 # Select 15 random cells to have historical sinkholes
 random.seed(42)  # For reproducibility
-selected_ids = random.sample(cell_ids, 15)
+selected_ids = random.sample(cell_ids, 250)
 
 history_data = {}
 for cid in selected_ids:
