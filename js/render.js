@@ -131,6 +131,7 @@ function updateDeckGLLayer() {
     pickable: true,
     extruded: true,
     wireframe: true,
+    onClick: handleGridClick,
     getPolygon: d => d.polygon,
     // 높이: 점수 1점당 80m (100점 = 8000m)
     getElevation: d => {
@@ -189,6 +190,7 @@ function updateDeckGLLayer() {
       id: 'dong-geojson-layer',
       data: DONG_GEOJSON,
       pickable: true,
+      onClick: handleGridClick,
       stroked: true,
       filled: true,
       lineWidthMinPixels: 1,
@@ -466,3 +468,82 @@ function setLoading(msg) { document.getElementById('loading-msg').textContent = 
 function hideLoading() { document.getElementById('loading').style.display = 'none'; }
 
 document.addEventListener('DOMContentLoaded', init);
+
+// ── 기능 4: 인공지능 재난 문자 생성 (LLM 흉내) ──────────────────────────────
+
+let selectedGridInfo = null;
+let llmTypingInterval = null;
+
+function handleGridClick(info) {
+  if (!info || !info.object) return;
+  
+  // 패널 띄우기
+  document.getElementById('llm-panel').style.display = 'block';
+  document.getElementById('btn-approve-llm').style.opacity = '0.5';
+  document.getElementById('btn-approve-llm').style.pointerEvents = 'none';
+  document.getElementById('llm-output').innerHTML = '작성 시작을 눌러주세요.';
+  document.getElementById('llm-output').style.color = '#8b949e';
+  
+  if (info.layer.id === 'dong-geojson-layer') {
+    const dongName = info.object.properties.adm_nm;
+    const history = DONG_HISTORY[dongName] || { count: 0, grade: 1 };
+    selectedGridInfo = { type: 'dong', name: dongName, grade: history.grade, count: history.count };
+    document.getElementById('llm-target-info').innerHTML = `📍 <b>${dongName}</b> (과거 ${history.count}건 발생)`;
+  } else {
+    const { id, gu, score, b, r, g, t, stage } = info.object;
+    selectedGridInfo = { type: 'grid', id, gu, score, b, r, g, t, stage };
+    document.getElementById('llm-target-info').innerHTML = `📍 <b>${gu} (ID: ${id})</b> / 위험 등급: ${stage}단계`;
+  }
+}
+
+function closeLlmPanel() {
+  document.getElementById('llm-panel').style.display = 'none';
+  if (llmTypingInterval) clearInterval(llmTypingInterval);
+}
+
+function generateLlmDraft() {
+  if (!selectedGridInfo) return;
+  
+  const outputEl = document.getElementById('llm-output');
+  outputEl.style.color = '#e6edf3';
+  outputEl.innerHTML = '';
+  document.getElementById('btn-approve-llm').style.opacity = '0.5';
+  document.getElementById('btn-approve-llm').style.pointerEvents = 'none';
+  
+  if (llmTypingInterval) clearInterval(llmTypingInterval);
+  
+  let draftText = '';
+  if (selectedGridInfo.type === 'dong') {
+    if (selectedGridInfo.count >= 3) {
+      draftText = `[안전안내문자]\n최근 ${selectedGridInfo.name} 일대에 지반 침하 이력이 다수 보고되었습니다.\n차량 운행 시 서행하시고, 도로 갈라짐 발견 시 120으로 즉시 신고 바랍니다.`;
+    } else {
+      draftText = `[안전안내문자]\n현재 ${selectedGridInfo.name} 주변은 지반 상태가 비교적 양호합니다.\n안전한 통행 되시길 바랍니다. (정기 점검 중)`;
+    }
+  } else {
+    const { gu, stage, b, r, g } = selectedGridInfo;
+    if (stage === 3 || r >= 15) {
+      draftText = `[긴급재난문자]\n현재 ${gu} 인근에 집중호우로 인한 급격한 지반 약화가 우려됩니다.\n싱크홀 발생 위험이 높으니 빗물이 고인 도로 및 이면도로 접근을 삼가고 우회하시기 바랍니다.`;
+    } else if (stage === 2 || g >= 10 || b >= 10) {
+      draftText = `[안전안내문자]\n${gu} 주변 노후 상하수도 누수 및 지하수위 변동으로 지반 침하 위험이 감지되었습니다.\n운전자 및 보행자는 주의하여 통행하시기 바랍니다.`;
+    } else {
+      draftText = `[안전안내문자]\n${gu} 일대의 실시간 지반 위험도는 '안전' 수준입니다. 특이사항 발생 시 신속히 안내해 드리겠습니다.`;
+    }
+  }
+
+  // 타이핑 효과
+  let i = 0;
+  llmTypingInterval = setInterval(() => {
+    outputEl.innerHTML += draftText.charAt(i);
+    i++;
+    if (i >= draftText.length) {
+      clearInterval(llmTypingInterval);
+      document.getElementById('btn-approve-llm').style.opacity = '1';
+      document.getElementById('btn-approve-llm').style.pointerEvents = 'auto';
+    }
+  }, 30);
+}
+
+function approveLlmDraft() {
+  alert("재난 문자 발송이 승인되었습니다. (데모)");
+  closeLlmPanel();
+}
