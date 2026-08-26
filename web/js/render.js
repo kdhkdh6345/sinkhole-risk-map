@@ -17,6 +17,7 @@ let NATIONWIDE_GEOJSON = null, PIPES_GEOJSON = null, COMPLAINTS_DATA = null;
 
 let activeLayers = {
   nationwide: false,
+  grid: true,
   dong: true,
   pipes: true,
   complaints: true,
@@ -186,8 +187,9 @@ function updateDeckGLLayer() {
   const layers = [];
   
   // 동별 보기 모드일 때는 격자(큐브)를 숨겨서 동별 지도가 잘 보이게 함
-  // 3D 큐브와 동별 맵이 모두 공존할 수 있도록 항상 표시 (또는 토글 추가 가능)
-  layers.push(layer);
+  if (activeLayers.grid) {
+    layers.push(layer);
+  }
 
   // 동별 보기 모드일 때 GeoJsonLayer 추가
   if (activeLayers.dong && DONG_GEOJSON) {
@@ -265,6 +267,7 @@ function updateDeckGLLayer() {
 
 window.toggleLayers = () => {
   activeLayers.nationwide = document.getElementById('chk-layer-nationwide').checked;
+  activeLayers.grid = document.getElementById('chk-layer-grid').checked;
   activeLayers.dong = document.getElementById('chk-layer-dong').checked;
   activeLayers.pipes = document.getElementById('chk-layer-pipes').checked;
   activeLayers.complaints = document.getElementById('chk-layer-complaints').checked;
