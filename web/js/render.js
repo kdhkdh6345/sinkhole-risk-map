@@ -15,7 +15,9 @@ let GRID_CELLS = {}, SNAP_CELLS = {}, SIM_CELLS = {}, SNAP_META = {};
 let playTimer = null, simElapsedH = 0;
 let autoRefreshTimer = null;
 let lastGeneratedAt = '';
-let currentScenario = 'extreme';
+let currentScenario = 'calm';
+let HISTORY_DATA = {};
+let showHistory = false;
 
 // [r, g, b, a] 형식
 const COLORS = {
@@ -46,16 +48,18 @@ async function init() {
     });
 
     setLoading('데이터 로드 중…');
-    const [gridData, snapData, gridCfgData, weightsCfgData, parityData] = await Promise.all([
+    const [gridData, snapData, gridCfgData, weightsCfgData, parityData, historyData] = await Promise.all([
       fetchJSON('data/grid.json'),
-      fetchJSON('data/snapshot.json'),
+      fetchJSON('data/snapshot_calm.json'),
       fetchJSON('data/grid_cfg.json'),
       fetchJSON('data/weights_cfg.json'),
       fetchJSON('data/parity.json').catch(() => null),
+      fetchJSON('data/history.json').catch(() => ({}))
     ]);
 
     GRID_CFG = gridCfgData;
     WEIGHTS_CFG = weightsCfgData;
+    if (historyData) HISTORY_DATA = historyData;
 
     for (const c of gridData.cells) {
       GRID_CELLS[c.id] = { lat: c.lat, lon: c.lon, gu: c.gu };
@@ -124,9 +128,18 @@ function updateDeckGLLayer() {
     wireframe: true,
     getPolygon: d => d.polygon,
     // 높이: 점수 1점당 80m (100점 = 8000m)
-    getElevation: d => d.score * 80,
-    getFillColor: d => COLORS[d.stage].fill,
-    getLineColor: d => COLORS[d.stage].stroke,
+    getElevation: d => {
+      if (showHistory && HISTORY_DATA[d.id]) return 100 * 80; // 과거 이력 구역은 최고 높이 고정
+      return d.score * 80;
+    },
+    getFillColor: d => {
+      if (showHistory && HISTORY_DATA[d.id]) return [163, 113, 247, 200]; // 보라색
+      return COLORS[d.stage].fill;
+    },
+    getLineColor: d => {
+      if (showHistory && HISTORY_DATA[d.id]) return [163, 113, 247, 255];
+      return COLORS[d.stage].stroke;
+    },
     getLineWidth: 10,
     // 부드러운 전환 효과
     transitions: {
@@ -138,9 +151,33 @@ function updateDeckGLLayer() {
   DECK.setProps({ layers: [layer] });
 }
 
+window.toggleHistory = () => {
+  showHistory = document.getElementById('chk-history').checked;
+  updateDeckGLLayer();
+};
+
 function getTooltipContent({object}) {
   if (!object) return null;
   const {id, gu, stage, score, b, r, g, t, unc} = object;
+  
+  if (showHistory && HISTORY_DATA[id]) {
+    const hist = HISTORY_DATA[id];
+    return {
+      html: `
+        <div style="font-family:'Noto Sans KR', sans-serif; font-size: 13px; color: #fff; background: rgba(163, 113, 247, 0.9); padding: 12px; border-radius: 6px; border: 1px solid #c2a3ff; min-width: 220px;">
+          <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 6px;">
+            ⚠️ 과거 싱크홀 발생 구역
+          </div>
+          <div style="display: grid; grid-template-columns: 70px 1fr; gap: 4px; font-size: 12px;">
+            <span style="color: rgba(255,255,255,0.8);">발생 일자:</span> <span style="font-weight: 500;">${hist.date}</span>
+            <span style="color: rgba(255,255,255,0.8);">발생 시각:</span> <span style="font-weight: 500;">${hist.time}</span>
+            <span style="color: rgba(255,255,255,0.8);">발생 위치:</span> <span style="font-weight: 500;">${hist.location}</span>
+          </div>
+        </div>
+      `
+    };
+  }
+
   const labels = { 1: '1단계 (초록)', 2: '2단계 (노랑)', 3: '3단계 (빨강)' };
   
   return {
