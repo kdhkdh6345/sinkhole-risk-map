@@ -141,6 +141,11 @@ function updateDeckGLLayer() {
       return COLORS[d.stage].stroke;
     },
     getLineWidth: 10,
+    updateTriggers: {
+      getElevation: [showHistory],
+      getFillColor: [showHistory],
+      getLineColor: [showHistory]
+    },
     // 부드러운 전환 효과
     transitions: {
       getElevation: 300,
