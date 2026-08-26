@@ -139,10 +139,20 @@ function updateDeckGLLayer() {
     },
     getFillColor: d => {
       if (historyMode === 'points' && HISTORY_DATA[d.id]) return [163, 113, 247, 200]; // 보라색
+      if (d.stage === 1) {
+        const s = Math.floor(d.score);
+        const alpha = Math.min(255, 40 + s * 14); // 1점 단위로 진해짐
+        return [46, 160, 67, alpha];
+      }
       return COLORS[d.stage].fill;
     },
     getLineColor: d => {
       if (historyMode === 'points' && HISTORY_DATA[d.id]) return [163, 113, 247, 255];
+      if (d.stage === 1) {
+        const s = Math.floor(d.score);
+        const alpha = Math.min(255, 100 + s * 10);
+        return [46, 160, 67, alpha];
+      }
       return COLORS[d.stage].stroke;
     },
     getLineWidth: 10,
@@ -158,7 +168,12 @@ function updateDeckGLLayer() {
     }
   });
 
-  const layers = [layer];
+  const layers = [];
+  
+  // 동별 보기 모드일 때는 격자(큐브)를 숨겨서 동별 지도가 잘 보이게 함
+  if (historyMode !== 'dong') {
+    layers.push(layer);
+  }
 
   // 동별 보기 모드일 때 GeoJsonLayer 추가
   if (historyMode === 'dong' && DONG_GEOJSON) {
