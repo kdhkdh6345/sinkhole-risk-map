@@ -389,15 +389,31 @@
     </div>
   </div>
 
+  <!-- 재난 문자 자동 생성 (숨김 기본) -->
+  <div class="panel-card" id="llm-panel" style="display: none; border-color: #a371f7;">
+    <h3 style="color: #c2a3ff; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+      <span>🤖 AI 재난 문자 초안</span>
+      <button onclick="closeLlmPanel()" style="background: none; border: none; color: #8b949e; cursor: pointer; font-size: 16px;">✕</button>
+    </h3>
+    <div id="llm-target-info" style="font-size: 0.75rem; color: #8b949e; margin-bottom: 8px;">선택된 지역 정보가 없습니다.</div>
+    
+    <div id="llm-output" style="background: #0d1117; padding: 10px; border-radius: 6px; border: 1px solid #30363d; font-size: 0.78rem; min-height: 80px; margin-bottom: 10px; font-family: 'Noto Sans KR', sans-serif; line-height: 1.5; white-space: pre-wrap; color: #e6edf3;">분석 대기 중...</div>
+    
+    <div style="display: flex; gap: 8px;">
+      <button class="btn" id="btn-generate-llm" onclick="generateLlmDraft()" style="background: #a371f7; color: #fff; border: none; font-weight: bold;">작성 시작</button>
+      <button class="btn" id="btn-approve-llm" onclick="approveLlmDraft()" style="background: #2ea043; color: #fff; border: none; font-weight: bold; opacity: 0.5; pointer-events: none;">승인/발송</button>
+    </div>
+  </div>
+
 </aside>
 
 <!-- MapLibre & Deck.gl JS -->
 <script src="https://unpkg.com/maplibre-gl@3.0.0/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/deck.gl@8.9.3/dist.min.js"></script>
 <!-- 감쇠·점수화 엔진 (Python 동일 로직) -->
-<script src="js/sim.js?v=7"></script>
+<script src="js/sim.js?v=8"></script>
 <!-- 지도 렌더링 -->
-<script src="js/render.js?v=7"></script>
+<script src="js/render.js?v=8"></script>
 
 </body>
 </html>
