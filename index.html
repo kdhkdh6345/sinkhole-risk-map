@@ -369,11 +369,12 @@
   <!-- 과거 발생 이력 표시 -->
   <div class="panel-card">
     <div class="toggle-history">
-      <span style="font-size: .85rem;">과거 발생 구역 표시</span>
-      <label class="switch">
-        <input type="checkbox" id="chk-history" onchange="toggleHistory()">
-        <span class="slider"></span>
-      </label>
+      <span style="font-size: .85rem; font-weight: bold;">과거 발생 구역 표시</span>
+    </div>
+    <div style="margin-top: 8px; font-size: 0.8rem; display: flex; flex-direction: column; gap: 6px;">
+      <label style="cursor: pointer;"><input type="radio" name="history_mode" value="off" checked onchange="toggleHistory()"> 표시 끄기</label>
+      <label style="cursor: pointer;"><input type="radio" name="history_mode" value="points" onchange="toggleHistory()"> 점(기둥)으로 보기 (격자기반)</label>
+      <label style="cursor: pointer;"><input type="radio" name="history_mode" value="dong" onchange="toggleHistory()"> 동별 위험도로 보기 (방법론)</label>
     </div>
   </div>
 
