@@ -50,7 +50,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--scenario",
-        choices=["calm", "heavy_rain", "extreme"],
+        choices=["calm", "heavy_rain", "extreme", "historical_flood_2022"],
         default="calm",
         help="[--mode sim 전용] 시나리오",
     )
@@ -159,11 +159,11 @@ def main() -> int:
             print(f"\n  ❌ calm: Stage 3 격자 {stage3_count}개 — 수용 기준 1번 위반!")
             return 1
 
-    elif args.scenario == "extreme":
+    elif args.scenario in ("extreme", "historical_flood_2022"):
         if stage3_count >= 1:
-            print(f"\n  ✅ extreme: Stage 3 {stage3_count}개 존재")
+            print(f"\n  ✅ {args.scenario}: Stage 3 {stage3_count}개 존재")
         else:
-            print(f"\n  ❌ extreme: Stage 3 격자 없음 — 수용 기준 2번 위반!")
+            print(f"\n  ❌ {args.scenario}: Stage 3 격자 없음 — 수용 기준 2번 위반!")
             return 1
 
     # ── 9. 파일 저장 (실패 시 기존 파일 보존) ────────────────────────────

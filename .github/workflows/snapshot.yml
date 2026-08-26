@@ -43,6 +43,8 @@ jobs:
         mv web/data/snapshot.json web/data/snapshot_heavy_rain.json
         python scripts/run_snapshot.py --mode sim --scenario extreme
         mv web/data/snapshot.json web/data/snapshot_extreme.json
+        python scripts/run_snapshot.py --mode sim --scenario historical_flood_2022
+        mv web/data/snapshot.json web/data/snapshot_historical_flood_2022.json
         
         # Keep a default snapshot.json as well
         cp web/data/snapshot_calm.json web/data/snapshot.json

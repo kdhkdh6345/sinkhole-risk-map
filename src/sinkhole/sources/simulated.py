@@ -22,6 +22,7 @@ from .base import GroundwaterSourceAdapter, RainSourceAdapter, TrafficSourceAdap
 # 시나리오별 강수 집중 자치구 (기저점수가 높은 곳 위주로 배치하여 UI에서 식별 가능하도록 수정)
 _HEAVY_RAIN_DISTRICTS = {"영등포구", "도봉구", "구로구", "성동구"}
 _EXTREME_DISTRICTS = {"종로구", "용산구", "성북구", "중구", "마포구"}
+_HISTORICAL_2022_DISTRICTS = {"동작구", "서초구", "강남구", "영등포구", "구로구", "관악구"}
 
 # 교통 부하 높은 자치구 (정적 프록시 — 도로 등급·버스노선 밀도 기반)
 _HIGH_TRAFFIC_DISTRICTS = {
@@ -45,9 +46,9 @@ class SimulatedRainAdapter(RainSourceAdapter):
     def __init__(self, scenario: str) -> None:
         """
         Args:
-            scenario: "calm" | "heavy_rain" | "extreme"
+            scenario: "calm" | "heavy_rain" | "extreme" | "historical_flood_2022"
         """
-        if scenario not in ("calm", "heavy_rain", "extreme"):
+        if scenario not in ("calm", "heavy_rain", "extreme", "historical_flood_2022"):
             raise ValueError(f"알 수 없는 시나리오: {scenario}")
         self._scenario = scenario
 
@@ -82,6 +83,15 @@ class SimulatedRainAdapter(RainSourceAdapter):
                     rain[i] = [75.0, 95.0, 185.0]  # 극한호우 R=25
                 else:
                     rain[i] = [0.0, 62.0, 115.0]   # 호우주의보 R=15
+                    
+        elif self._scenario == "historical_flood_2022":
+            # 2022년 8월 8일 동작구 신대방 관측소(410) 및 강남 일대 강수량 기준
+            # 1h: 141.5mm / 3h: 259.0mm / 12h: 380mm+ (R=25 확정 + 매우 위험)
+            for i, gu in enumerate(grid_df["gu"]):
+                if gu in _HISTORICAL_2022_DISTRICTS:
+                    rain[i] = [141.5, 259.0, 381.5]
+                else:
+                    rain[i] = [50.0, 100.0, 150.0]
 
         return rain
 
@@ -93,7 +103,7 @@ class SimulatedGroundwaterAdapter(GroundwaterSourceAdapter):
     """
 
     def __init__(self, scenario: str) -> None:
-        if scenario not in ("calm", "heavy_rain", "extreme"):
+        if scenario not in ("calm", "heavy_rain", "extreme", "historical_flood_2022"):
             raise ValueError(f"알 수 없는 시나리오: {scenario}")
         self._scenario = scenario
 
@@ -121,6 +131,12 @@ class SimulatedGroundwaterAdapter(GroundwaterSourceAdapter):
             for i, gu in enumerate(grid_df["gu"]):
                 if gu in _EXTREME_DISTRICTS:
                     sigma[i] = -2.1  # 2.1σ 급락
+                    
+        elif self._scenario == "historical_flood_2022":
+            # 토립자 유실로 인한 수위 폭락 (3σ 이상)
+            for i, gu in enumerate(grid_df["gu"]):
+                if gu in _HISTORICAL_2022_DISTRICTS:
+                    sigma[i] = -3.5  # 3.5σ 폭락
 
         return sigma
 
