@@ -49,12 +49,12 @@ async function init() {
 
     setLoading('데이터 로드 중…');
     const [gridData, snapData, gridCfgData, weightsCfgData, parityData, historyData] = await Promise.all([
-      fetchJSON('data/grid.json'),
-      fetchJSON('data/snapshot_calm.json'),
-      fetchJSON('data/grid_cfg.json'),
-      fetchJSON('data/weights_cfg.json'),
-      fetchJSON('data/parity.json').catch(() => null),
-      fetchJSON('data/history.json').catch(() => ({}))
+      fetchJSON(`data/grid.json?t=${Date.now()}`),
+      fetchJSON(`data/snapshot_calm.json?t=${Date.now()}`),
+      fetchJSON(`data/grid_cfg.json?t=${Date.now()}`),
+      fetchJSON(`data/weights_cfg.json?t=${Date.now()}`),
+      fetchJSON(`data/parity.json?t=${Date.now()}`).catch(() => null),
+      fetchJSON(`data/history.json?t=${Date.now()}`).catch(() => ({}))
     ]);
 
     GRID_CFG = gridCfgData;
