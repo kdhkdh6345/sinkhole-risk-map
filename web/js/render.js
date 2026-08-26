@@ -8,7 +8,7 @@
  */
 'use strict';
 
-const {DeckGL, PolygonLayer, MapView} = deck;
+const {DeckGL, PolygonLayer, GeoJsonLayer, MapView} = deck;
 
 let DECK, GRID_CFG, WEIGHTS_CFG;
 let GRID_CELLS = {}, SNAP_CELLS = {}, SIM_CELLS = {}, SNAP_META = {};
@@ -17,7 +17,8 @@ let autoRefreshTimer = null;
 let lastGeneratedAt = '';
 let currentScenario = 'calm';
 let HISTORY_DATA = {};
-let showHistory = false;
+let DONG_GEOJSON = null, DONG_HISTORY = {};
+let historyMode = 'off'; // 'off' | 'points' | 'dong'
 
 // [r, g, b, a] 형식
 const COLORS = {
@@ -48,18 +49,22 @@ async function init() {
     });
 
     setLoading('데이터 로드 중…');
-    const [gridData, snapData, gridCfgData, weightsCfgData, parityData, historyData] = await Promise.all([
+    const [gridData, snapData, gridCfgData, weightsCfgData, parityData, historyData, dongGeoJson, dongHistory] = await Promise.all([
       fetchJSON(`data/grid.json?t=${Date.now()}`),
       fetchJSON(`data/snapshot_calm.json?t=${Date.now()}`),
       fetchJSON(`data/grid_cfg.json?t=${Date.now()}`),
       fetchJSON(`data/weights_cfg.json?t=${Date.now()}`),
       fetchJSON(`data/parity.json?t=${Date.now()}`).catch(() => null),
-      fetchJSON(`data/history.json?t=${Date.now()}`).catch(() => ({}))
+      fetchJSON(`data/history.json?t=${Date.now()}`).catch(() => ({})),
+      fetchJSON(`data/seoul_dong.geojson?t=${Date.now()}`).catch(() => null),
+      fetchJSON(`data/dong_history.json?t=${Date.now()}`).catch(() => ({}))
     ]);
 
     GRID_CFG = gridCfgData;
     WEIGHTS_CFG = weightsCfgData;
     if (historyData) HISTORY_DATA = historyData;
+    if (dongGeoJson) DONG_GEOJSON = dongGeoJson;
+    if (dongHistory) DONG_HISTORY = dongHistory;
 
     for (const c of gridData.cells) {
       GRID_CELLS[c.id] = { lat: c.lat, lon: c.lon, gu: c.gu };
@@ -129,22 +134,22 @@ function updateDeckGLLayer() {
     getPolygon: d => d.polygon,
     // 높이: 점수 1점당 80m (100점 = 8000m)
     getElevation: d => {
-      if (showHistory && HISTORY_DATA[d.id]) return 100 * 80; // 과거 이력 구역은 최고 높이 고정
+      if (historyMode === 'points' && HISTORY_DATA[d.id]) return 100 * 80; // 과거 이력 구역은 최고 높이 고정
       return d.score * 80;
     },
     getFillColor: d => {
-      if (showHistory && HISTORY_DATA[d.id]) return [163, 113, 247, 200]; // 보라색
+      if (historyMode === 'points' && HISTORY_DATA[d.id]) return [163, 113, 247, 200]; // 보라색
       return COLORS[d.stage].fill;
     },
     getLineColor: d => {
-      if (showHistory && HISTORY_DATA[d.id]) return [163, 113, 247, 255];
+      if (historyMode === 'points' && HISTORY_DATA[d.id]) return [163, 113, 247, 255];
       return COLORS[d.stage].stroke;
     },
     getLineWidth: 10,
     updateTriggers: {
-      getElevation: [showHistory],
-      getFillColor: [showHistory],
-      getLineColor: [showHistory]
+      getElevation: [historyMode],
+      getFillColor: [historyMode],
+      getLineColor: [historyMode]
     },
     // 부드러운 전환 효과
     transitions: {
@@ -153,19 +158,69 @@ function updateDeckGLLayer() {
     }
   });
 
-  DECK.setProps({ layers: [layer] });
+  const layers = [layer];
+
+  // 동별 보기 모드일 때 GeoJsonLayer 추가
+  if (historyMode === 'dong' && DONG_GEOJSON) {
+    const dongColors = {
+      1: [46, 160, 67, 100],   // 0건: 안전 (파란/초록색)
+      2: [168, 204, 30, 150],  // 1건: 노란초록
+      3: [210, 153, 34, 180],  // 2건: 노란색
+      4: [218, 100, 30, 200],  // 3건: 주황색
+      5: [218, 54, 51, 230],   // 4건 이상: 진한 빨간색
+    };
+
+    const dongLayer = new GeoJsonLayer({
+      id: 'dong-geojson-layer',
+      data: DONG_GEOJSON,
+      pickable: true,
+      stroked: true,
+      filled: true,
+      lineWidthMinPixels: 1,
+      getFillColor: d => {
+        const dongName = d.properties.adm_nm;
+        const history = DONG_HISTORY[dongName];
+        const grade = history ? history.grade : 1;
+        return dongColors[grade] || dongColors[1];
+      },
+      getLineColor: [255, 255, 255, 100],
+      getLineWidth: 1
+    });
+    layers.push(dongLayer);
+  }
+
+  DECK.setProps({ layers: layers });
 }
 
 window.toggleHistory = () => {
-  showHistory = document.getElementById('chk-history').checked;
+  const radio = document.querySelector('input[name="history_mode"]:checked');
+  historyMode = radio ? radio.value : 'off';
   updateDeckGLLayer();
 };
 
-function getTooltipContent({object}) {
+function getTooltipContent({object, layer}) {
   if (!object) return null;
+
+  if (layer && layer.id === 'dong-geojson-layer') {
+    const dongName = object.properties.adm_nm;
+    const history = DONG_HISTORY[dongName] || { count: 0, grade: 1 };
+    const gradeLabels = {1: '1등급 (안전)', 2: '2등급 (주의)', 3: '3등급 (위험)', 4: '4등급 (고위험)', 5: '5등급 (심각)'};
+    return {
+      html: `
+        <div style="font-family:'Noto Sans KR', sans-serif; font-size: 13px; color: #fff; background: rgba(30, 40, 50, 0.9); padding: 12px; border-radius: 6px; border: 1px solid #4a5c6d; min-width: 220px;">
+          <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 6px;">
+            📍 ${dongName} (과거 이력)
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><span>발생 건수</span> <strong style="color:#ffb84d">${history.count} 건</strong></div>
+          <div style="display: flex; justify-content: space-between;"><span>위험 등급</span> <strong style="color:#ffb84d">${gradeLabels[history.grade]}</strong></div>
+        </div>
+      `
+    };
+  }
+
   const {id, gu, stage, score, b, r, g, t, unc} = object;
   
-  if (showHistory && HISTORY_DATA[id]) {
+  if (historyMode === 'points' && HISTORY_DATA[id]) {
     const hist = HISTORY_DATA[id];
     return {
       html: `
