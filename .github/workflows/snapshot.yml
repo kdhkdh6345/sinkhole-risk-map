@@ -37,7 +37,15 @@ jobs:
         python scripts/build_baseline.py
         
         # Generate the latest snapshot for all scenarios
-        python scripts/run_snapshot.py
+        python scripts/run_snapshot.py --mode sim --scenario calm
+        mv web/data/snapshot.json web/data/snapshot_calm.json
+        python scripts/run_snapshot.py --mode sim --scenario heavy_rain
+        mv web/data/snapshot.json web/data/snapshot_heavy_rain.json
+        python scripts/run_snapshot.py --mode sim --scenario extreme
+        mv web/data/snapshot.json web/data/snapshot_extreme.json
+        
+        # Keep a default snapshot.json as well
+        cp web/data/snapshot_calm.json web/data/snapshot.json
 
     - name: Commit and push if changed
       run: |
