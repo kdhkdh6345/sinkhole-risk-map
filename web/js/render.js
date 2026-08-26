@@ -268,9 +268,16 @@ function getTooltipContent({object, layer}) {
 
   const labels = { 1: '1단계 (초록)', 2: '2단계 (노랑)', 3: '3단계 (빨강)' };
   
+  // 종합 위험도 퍼센트 계산 (임계값 40점을 100%로 간주)
+  const riskPercentage = Math.min(100, (score / 40) * 100).toFixed(1);
+  const percentColor = riskPercentage >= 75 ? '#ff7b72' : (riskPercentage >= 40 ? '#d29922' : '#3fb950');
+
   return {
     html: `
       <div style="font-family:'Noto Sans KR', sans-serif; font-size: 13px; color: #fff; background: rgba(22,27,34,0.9); padding: 10px; border-radius: 6px; border: 1px solid #30363d; min-width: 200px;">
+        <div style="font-weight: bold; font-size: 15px; margin-bottom: 8px; border-bottom: 1px solid #30363d; padding-bottom: 6px; color: ${percentColor};">
+          ⚠️ 종합 위험도: ${riskPercentage}%
+        </div>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid #30363d; padding-bottom: 8px;">
           <span style="font-weight: bold; background: rgb(${COLORS[stage].stroke.slice(0,3).join(',')}); padding: 2px 6px; border-radius: 4px; font-size: 11px;">${labels[stage]}</span>
           <span style="color: #7d8590;">id #${id} · ${gu}</span>
