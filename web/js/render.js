@@ -156,22 +156,16 @@ function updateDeckGLLayer() {
     wireframe: true,
     onClick: handleGridClick,
     getPolygon: d => d.polygon,
-    // 높이: 점수 1점당 80m (100점 = 8000m)
-    getElevation: d => {
-      if (historyMode === 'points' && HISTORY_DATA[d.id]) return 40 * 80; // 과거 이력 구역 높이 (적당한 높이로 변경)
-      return d.score * 80;
-    },
+    getElevation: d => d.score * 80,
     getFillColor: d => {
-      if (historyMode === 'points' && HISTORY_DATA[d.id]) return [163, 113, 247, 200]; // 보라색
       if (d.stage === 1) {
         const s = Math.floor(d.score);
-        const alpha = Math.min(255, 40 + s * 14); // 1점 단위로 진해짐
+        const alpha = Math.min(255, 40 + s * 14);
         return [46, 160, 67, alpha];
       }
       return COLORS[d.stage].fill;
     },
     getLineColor: d => {
-      if (historyMode === 'points' && HISTORY_DATA[d.id]) return [163, 113, 247, 255];
       if (d.stage === 1) {
         const s = Math.floor(d.score);
         const alpha = Math.min(255, 100 + s * 10);
@@ -180,12 +174,41 @@ function updateDeckGLLayer() {
       return COLORS[d.stage].stroke;
     },
     getLineWidth: 10,
-    updateTriggers: {
-      getElevation: [historyMode],
-      getFillColor: [historyMode],
-      getLineColor: [historyMode]
-    },
-    // 부드러운 전환 효과
+    transitions: {
+      getElevation: 300,
+      getFillColor: 300
+    }
+  });
+
+  // ── 과거 싱크홀 발생 현황 (독립 레이어) ──────────────────────
+  const historyLayerData = [];
+  if (activeLayers.points) {
+    for (const [idStr, info] of Object.entries(HISTORY_DATA)) {
+      const id = +idStr;
+      const gc = GRID_CELLS[id];
+      if (!gc) continue;
+      const polygon = [
+        [gc.lon - HALF, gc.lat - HALF],
+        [gc.lon + HALF, gc.lat - HALF],
+        [gc.lon + HALF, gc.lat + HALF],
+        [gc.lon - HALF, gc.lat + HALF]
+      ];
+      historyLayerData.push({ id, polygon, info });
+    }
+  }
+
+  const historyLayer = new PolygonLayer({
+    id: 'history-layer',
+    data: historyLayerData,
+    pickable: true,
+    extruded: true,
+    wireframe: true,
+    onClick: handleGridClick,
+    getPolygon: d => d.polygon,
+    getElevation: 40 * 80,
+    getFillColor: [163, 113, 247, 200],
+    getLineColor: [163, 113, 247, 255],
+    getLineWidth: 10,
     transitions: {
       getElevation: 300,
       getFillColor: 300
@@ -194,9 +217,14 @@ function updateDeckGLLayer() {
 
   const layers = [];
   
-  // 동별 보기 모드일 때는 격자(큐브)를 숨겨서 동별 지도가 잘 보이게 함
+  // 3D 격자(큐브) 종합 위험도
   if (activeLayers.grid) {
     layers.push(layer);
+  }
+
+  // 과거 싱크홀 발생 현황 (독립)
+  if (activeLayers.points && historyLayerData.length > 0) {
+    layers.push(historyLayer);
   }
 
   // 동별 보기 모드일 때 GeoJsonLayer 추가
