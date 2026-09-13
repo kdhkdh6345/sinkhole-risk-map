@@ -243,14 +243,45 @@ function updateDeckGLLayer() {
   }
 
   if (activeLayers.pipes && PIPES_GEOJSON) {
+    // 지하철 노선만 필터
+    const subwayData = {
+      type: 'FeatureCollection',
+      features: PIPES_GEOJSON.features.filter(f => f.properties.type === 'subway')
+    };
+    // 노후관로만 필터
+    const pipeData = {
+      type: 'FeatureCollection',
+      features: PIPES_GEOJSON.features.filter(f => f.properties.type === 'pipe')
+    };
+
+    // 지하철 노선 레이어 (노선별 실제 색상)
     layers.push(new GeoJsonLayer({
-      id: 'pipes-layer',
-      data: PIPES_GEOJSON,
+      id: 'subway-layer',
+      data: subwayData,
       stroked: true,
       filled: false,
-      getLineColor: d => d.properties.type === 'subway' ? [0, 150, 255, 200] : [255, 100, 0, 200],
-      getLineWidth: d => d.properties.type === 'subway' ? 50 : 20,
+      getLineColor: d => {
+        const hex = d.properties.color || '#0096FF';
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return [r, g, b, 220];
+      },
+      getLineWidth: 80,
       lineWidthMinPixels: 3,
+      pickable: true,
+      onClick: handleGridClick
+    }));
+
+    // 상하수도 노후 관로 레이어
+    layers.push(new GeoJsonLayer({
+      id: 'pipes-layer',
+      data: pipeData,
+      stroked: true,
+      filled: false,
+      getLineColor: [255, 120, 30, 180],
+      getLineWidth: 30,
+      lineWidthMinPixels: 2,
       pickable: true,
       onClick: handleGridClick
     }));
