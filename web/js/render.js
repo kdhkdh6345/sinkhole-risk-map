@@ -155,7 +155,7 @@ function updateDeckGLLayer() {
     getPolygon: d => d.polygon,
     // 높이: 점수 1점당 80m (100점 = 8000m)
     getElevation: d => {
-      if (historyMode === 'points' && HISTORY_DATA[d.id]) return 1; // 과거 이력 구역 높이 1미터 (평면 수준)
+      if (historyMode === 'points' && HISTORY_DATA[d.id]) return 40 * 80; // 과거 이력 구역 높이 (적당한 높이로 변경)
       return d.score * 80;
     },
     getFillColor: d => {
