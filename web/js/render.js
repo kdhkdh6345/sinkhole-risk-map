@@ -489,6 +489,8 @@ async function onScenarioChange(e) {
   }
 }
 
+let ORIGINAL_RAW_CELLS = {};
+
 function applySnapshot(snapData) {
   SNAP_META = {
     generated_at: snapData.generated_at,
@@ -499,7 +501,20 @@ function applySnapshot(snapData) {
 
   for (const c of snapData.cells) {
     SNAP_CELLS[c.id] = c;
-    SIM_CELLS[c.id] = { b: c.b, r_raw: c.r, g_raw: c.g, t_raw: c.t };
+    ORIGINAL_RAW_CELLS[c.id] = { b: c.b, r: c.r, g: c.g, t: c.t };
+    
+    // 초기 1회 랜덤성 부여
+    const noise = () => (Math.random() * 0.4 - 0.2) + 1; // 0.8 ~ 1.2
+    
+    // calm 시나리오에서도 미세한 변화를 주기 위해 최소 0.1~2 정도의 기본값을 더해줍니다.
+    const baseNoise = () => Math.random() * 2.0;
+
+    SIM_CELLS[c.id] = { 
+      b: c.b, 
+      r_raw: (c.r === 0 ? baseNoise() : c.r) * noise(), 
+      g_raw: (c.g === 0 ? baseNoise() : c.g) * noise(), 
+      t_raw: (c.t === 0 ? baseNoise() : c.t) * noise() 
+    };
   }
 }
 
@@ -589,6 +604,23 @@ function simReset() {
   document.getElementById('t-hours').textContent = '0';
   document.getElementById('btn-play').textContent = '▶ 재생';
   document.getElementById('btn-play').classList.remove('active');
+  
+  // 초기화 시 매번 새로운 랜덤성 부여
+  const noise = () => (Math.random() * 0.4 - 0.2) + 1; // 0.8 ~ 1.2
+  const baseNoise = () => Math.random() * 2.0;
+
+  for (const idStr of Object.keys(SIM_CELLS)) {
+    const id = +idStr;
+    const orig = ORIGINAL_RAW_CELLS[id];
+    if (!orig) continue;
+    SIM_CELLS[id] = {
+      b: orig.b,
+      r_raw: (orig.r === 0 ? baseNoise() : orig.r) * noise(),
+      g_raw: (orig.g === 0 ? baseNoise() : orig.g) * noise(),
+      t_raw: (orig.t === 0 ? baseNoise() : orig.t) * noise()
+    };
+  }
+  
   applySimDecay(0);
 }
 
