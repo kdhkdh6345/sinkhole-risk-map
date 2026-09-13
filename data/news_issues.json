@@ -1,69 +1,29 @@
 {
   "issues": [
     {
-      "title": "\"저녁 8시까지 실시간 주식 거래\"…아침도 검토",
-      "link": "<![CDATA[https://news.sbs.co.kr/news/endPage.do?news_id=N1008750819&plink=RSSLINK&cooper=RSSREADER]]>",
-      "description": "내일부터 한국거래소에서도 저녁 8시까지 주식을 실시간으로 사고팔 수 있게 됩니다. 지금까지...",
-      "lat": 37.45500350818299,
-      "lon": 127.04210805956593,
-      "type": "news"
-    },
-    {
-      "title": "\"대미투자 합의 근접…이번 주 타결·발표 목표\"",
-      "link": "<![CDATA[https://news.sbs.co.kr/news/endPage.do?news_id=N1008750815&plink=RSSLINK&cooper=RSSREADER]]>",
-      "description": "대미 투자 프로젝트 선정을 위해 미국에서 막판 협상을 벌였던 김정관 산업통상부 장관이 오늘...",
-      "lat": 37.523922832442025,
-      "lon": 126.95497397492993,
-      "type": "news"
-    },
-    {
-      "title": "이형일 \"금투세 도입 여부, 시장 충분히 안정된 후 검토\"",
-      "link": "<![CDATA[https://news.sbs.co.kr/news/endPage.do?news_id=N1008750806&plink=RSSLINK&cooper=RSSREADER]]>",
-      "description": "&#9650; 이형일 경제부총리 겸 재정경제부 장관 후보자이형일 경제부총리 겸 재정경제부 ...",
-      "lat": 37.53040900335774,
-      "lon": 127.01777708342611,
-      "type": "news"
-    },
-    {
-      "title": "김정관 \"대미투자, 근접했지만 쟁점 남아…이번 주 타결 시도\"",
-      "link": "<![CDATA[https://news.sbs.co.kr/news/endPage.do?news_id=N1008750805&plink=RSSLINK&cooper=RSSREADER]]>",
-      "description": "&#9650; 대미투자협상 마무리차 방미했던 김정관 산업통상부 장관이 13일 인천국제공항 ...",
-      "lat": 37.52184285680927,
-      "lon": 126.98615005358798,
-      "type": "news"
-    },
-    {
-      "title": "구윤철 \"한-우즈벡, 최고의 동반자…지방정부 간 협력 적극 지원\"",
-      "link": "<![CDATA[https://news.sbs.co.kr/news/endPage.do?news_id=N1008750612&plink=RSSLINK&cooper=RSSREADER]]>",
-      "description": "&#9650; 구윤철 부총리 겸 재정경제부 장관구윤철 부총리 겸 재정경제부 장관은 &#34...",
-      "lat": 37.499987358199135,
-      "lon": 127.02593275929894,
-      "type": "news"
-    },
-    {
       "title": "[단독] 9호선 공사 지연 연장... 지반 침하 우려",
       "link": "https://news.naver.com",
       "description": "9호선 4단계 연장 공사 구간에서 지반 약화 징후가 발견되어 공사가 일시 중단되었습니다.",
-      "lat": 37.555,
-      "lon": 127.145,
       "type": "subway_construction"
     },
     {
       "title": "삼성역 환승센터 철근 빠짐 논란... 안전 진단 시급",
       "link": "https://news.naver.com",
       "description": "영동대로 복합환승센터(삼성역) 지하 공사 현장에서 철근 누락이 발견되어...",
-      "lat": 37.511,
-      "lon": 127.059,
       "type": "subway_construction"
     },
     {
       "title": "종로구 노후 상수도관 파열... 일대 도로 통제",
       "link": "https://news.naver.com",
       "description": "어젯밤 종로구 인근에서 30년 넘은 노후 상수도관이 파열되어 도로가 침수되었습니다.",
-      "lat": 37.57,
-      "lon": 126.983,
       "type": "pipe_issue"
+    },
+    {
+      "title": "수도권 집중호우... 지반 침하 및 싱크홀 우려",
+      "link": "https://news.naver.com",
+      "description": "밤사이 내린 폭우로 인해 서울 도심 곳곳에서 지반 침하 징후가 보고되고 있습니다.",
+      "type": "weather"
     }
   ],
-  "updated_at": "2026-09-14T04:40:00.241862"
+  "updated_at": "2026-09-14T05:06:16.427646"
 }

@@ -386,7 +386,7 @@
       <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-dong" onchange="toggleLayers()" checked> 서울시 동별 위험도 히트맵</label>
       <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-pipes" onchange="toggleLayers()" checked> 지하철 노선도 / 상하수도 노후 관로</label>
       <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-complaints" onchange="toggleLayers()" checked> 최근 민원 발생 위치 핀(Pin)</label>
-      <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-news" onchange="toggleLayers()" checked> 실시간 뉴스 기사 크롤링 (지하철/노후관)</label>
+
       <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-points" onchange="toggleLayers()"> 과거 싱크홀 발생 현황</label>
     </div>
   </div>
@@ -427,6 +427,15 @@
     <div style="display: flex; gap: 8px;">
       <button class="btn" id="btn-generate-llm" onclick="generateLlmDraft()" style="background: #a371f7; color: #fff; border: none; font-weight: bold;">작성 시작</button>
       <button class="btn" id="btn-approve-llm" onclick="approveLlmDraft()" style="background: #2ea043; color: #fff; border: none; font-weight: bold; opacity: 0.5; pointer-events: none;">승인/발송</button>
+    </div>
+  </div>
+
+  <!-- 실시간 뉴스 크롤링 피드 -->
+  <div class="panel-card" id="news-panel" style="margin-top: 15px; border-color: #316dca;">
+    <h3 style="color: #58a6ff; margin-bottom: 8px;">📰 실시간 관련 뉴스</h3>
+    <div id="news-feed-list" style="max-height: 200px; overflow-y: auto; font-size: 0.8rem; color: #c9d1d9; display: flex; flex-direction: column; gap: 8px;">
+      <!-- 뉴스 항목들이 렌더링될 공간 -->
+      <div style="text-align: center; color: #8b949e; padding: 10px;">뉴스를 불러오는 중...</div>
     </div>
   </div>
 </aside>

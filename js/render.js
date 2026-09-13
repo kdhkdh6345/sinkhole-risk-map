@@ -69,7 +69,7 @@ async function init() {
       fetchJSON(`data/seoul_dong.geojson?t=${Date.now()}`).catch(() => null),
       fetchJSON(`data/dong_history.json?t=${Date.now()}`).catch(() => ({})),
       fetchJSON(`https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea_provinces_geo_simple.json`).catch(() => null),
-      fetchJSON(`data/mock_pipes.geojson?t=${Date.now()}`).catch(() => null),
+      fetchJSON(`data/seoul_subway.geojson?t=${Date.now()}`).catch(() => null),
       fetchJSON(`data/mock_complaints.json?t=${Date.now()}`).catch(() => null),
       fetchJSON(`data/pipe_penalties.json?t=${Date.now()}`).catch(() => null),
       fetchJSON(`data/news_issues.json?t=${Date.now()}`).catch(() => null)
@@ -88,6 +88,10 @@ async function init() {
 
     for (const c of gridData.cells) {
       GRID_CELLS[c.id] = { lat: c.lat, lon: c.lon, gu: c.gu };
+    }
+
+    // 뉴스 렌더링
+    renderNewsFeed();
     }
 
     applySnapshot(snapData);
@@ -266,29 +270,7 @@ function updateDeckGLLayer() {
     }));
   }
 
-  if (activeLayers.news && NEWS_ISSUES) {
-    const newsLayer = new ScatterplotLayer({
-      id: 'news-issues-layer',
-      data: NEWS_ISSUES,
-      pickable: true,
-      opacity: 0.8,
-      stroked: true,
-      filled: true,
-      radiusScale: 100,
-      radiusMinPixels: 6,
-      radiusMaxPixels: 20,
-      lineWidthMinPixels: 2,
-      getPosition: d => [d.lon, d.lat],
-      getFillColor: d => [255, 60, 60, 220],
-      getLineColor: [255, 255, 255],
-      onClick: info => {
-        if (info.object) {
-          window.open(info.object.link, '_blank');
-        }
-      }
-    });
-    layers.push(newsLayer);
-  }
+
 
   DECK.setProps({ layers: layers });
 
