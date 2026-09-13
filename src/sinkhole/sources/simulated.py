@@ -65,33 +65,33 @@ class SimulatedRainAdapter(RainSourceAdapter):
         rain = np.zeros((n, 3), dtype=np.float64)  # [1h, 3h, 12h]
 
         if self._scenario == "calm":
-            # 평시: 전 격자 무강수
-            pass  # rain은 이미 0
+            # 평시: 약간의 산발적인 이슬비
+            for i in range(n):
+                rain[i] = [max(0.0, np.random.normal(0, 1)), max(0.0, np.random.normal(0, 3)), max(0.0, np.random.normal(0, 5))]
 
         elif self._scenario == "heavy_rain":
             # 호우경보 (3h >= 90mm → R = 20)
             for i, gu in enumerate(grid_df["gu"]):
                 if gu in _HEAVY_RAIN_DISTRICTS:
-                    rain[i] = [0.0, 92.0, 0.0]  # 3h=92mm → 호우경보 R=20
+                    rain[i] = [max(0.0, np.random.normal(20, 5)), max(0.0, np.random.normal(92, 10)), max(0.0, np.random.normal(110, 20))]
                 else:
-                    rain[i] = [0.0, 42.0, 0.0]  # 3h=42mm → 사전주의 R=10
+                    rain[i] = [max(0.0, np.random.normal(10, 3)), max(0.0, np.random.normal(42, 8)), max(0.0, np.random.normal(50, 15))]
 
         elif self._scenario == "extreme":
             # 극한호우 (1h >= 72mm → R = 25)
             for i, gu in enumerate(grid_df["gu"]):
                 if gu in _EXTREME_DISTRICTS:
-                    rain[i] = [75.0, 95.0, 185.0]  # 극한호우 R=25
+                    rain[i] = [max(0.0, np.random.normal(75, 10)), max(0.0, np.random.normal(95, 15)), max(0.0, np.random.normal(185, 30))]
                 else:
-                    rain[i] = [0.0, 62.0, 115.0]   # 호우주의보 R=15
+                    rain[i] = [max(0.0, np.random.normal(30, 8)), max(0.0, np.random.normal(62, 12)), max(0.0, np.random.normal(115, 20))]
                     
         elif self._scenario == "historical_flood_2022":
             # 2022년 8월 8일 동작구 신대방 관측소(410) 및 강남 일대 강수량 기준
-            # 1h: 141.5mm / 3h: 259.0mm / 12h: 380mm+ (R=25 확정 + 매우 위험)
             for i, gu in enumerate(grid_df["gu"]):
                 if gu in _HISTORICAL_2022_DISTRICTS:
-                    rain[i] = [141.5, 259.0, 381.5]
+                    rain[i] = [max(0.0, np.random.normal(141.5, 15)), max(0.0, np.random.normal(259.0, 25)), max(0.0, np.random.normal(381.5, 40))]
                 else:
-                    rain[i] = [50.0, 100.0, 150.0]
+                    rain[i] = [max(0.0, np.random.normal(50.0, 10)), max(0.0, np.random.normal(100.0, 15)), max(0.0, np.random.normal(150.0, 25))]
 
         return rain
 
@@ -117,26 +117,33 @@ class SimulatedGroundwaterAdapter(GroundwaterSourceAdapter):
         sigma = np.zeros(n, dtype=np.float64)
 
         if self._scenario == "calm":
-            # 지하수위 정상 → 이상 없음
-            pass
+            # 지하수위 정상 → 이상 없음 (약간의 자연적 변동 추가)
+            for i in range(n):
+                sigma[i] = np.random.normal(0, 0.2)
 
         elif self._scenario == "heavy_rain":
             # 강남4구 일대 소폭 급락 → G = 5 (1σ 하강)
             for i, gu in enumerate(grid_df["gu"]):
                 if gu in _HEAVY_RAIN_DISTRICTS:
-                    sigma[i] = -1.2  # 1.2σ 급락
+                    sigma[i] = np.random.normal(-1.2, 0.3)
+                else:
+                    sigma[i] = np.random.normal(0, 0.3)
 
         elif self._scenario == "extreme":
             # 2σ 이상 급락 → G = 10 (단, R >= 15 조건 별도 체크)
             for i, gu in enumerate(grid_df["gu"]):
                 if gu in _EXTREME_DISTRICTS:
-                    sigma[i] = -2.1  # 2.1σ 급락
+                    sigma[i] = np.random.normal(-2.1, 0.4)
+                else:
+                    sigma[i] = np.random.normal(-0.5, 0.3)
                     
         elif self._scenario == "historical_flood_2022":
             # 토립자 유실로 인한 수위 폭락 (3σ 이상)
             for i, gu in enumerate(grid_df["gu"]):
                 if gu in _HISTORICAL_2022_DISTRICTS:
-                    sigma[i] = -3.5  # 3.5σ 폭락
+                    sigma[i] = np.random.normal(-3.5, 0.5)
+                else:
+                    sigma[i] = np.random.normal(-1.0, 0.4)
 
         return sigma
 
@@ -169,8 +176,10 @@ class SimulatedTrafficAdapter(TrafficSourceAdapter):
 
         for i, gu in enumerate(grid_df["gu"]):
             if gu in _HIGH_TRAFFIC_DISTRICTS:
-                deg[i] = 0.85  # T ≈ 4.25
+                deg[i] = np.clip(np.random.normal(0.85, 0.1), 0, 1.0)
             elif gu in _MED_TRAFFIC_DISTRICTS:
-                deg[i] = 0.50  # T ≈ 2.50
+                deg[i] = np.clip(np.random.normal(0.50, 0.1), 0, 1.0)
+            else:
+                deg[i] = np.clip(np.random.normal(0.20, 0.05), 0, 1.0)
 
         return deg
