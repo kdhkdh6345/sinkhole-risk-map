@@ -357,6 +357,11 @@
       <button class="btn" id="btn-play" onclick="simToggle()">▶ 재생</button>
     </div>
     <div id="time-display">가상 시각: +<span id="t-hours">0</span>h</div>
+    
+    <div id="sim-explanation" style="margin-top: 10px; font-size: 0.8rem; color: #a0a0a0; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); display: none;">
+      <div style="font-weight: bold; color: #fff; margin-bottom: 4px;">[시뮬레이션 진행 상황]</div>
+      <div id="sim-exp-text">강수량과 지하수위가 0시간을 기점으로 수학적 모델에 따라 점진적으로 감쇠(회복)하며 위험도가 변동됩니다. (랜덤 방식 아님)</div>
+    </div>
   </div>
 
   <!-- 지도 테마 설정 -->
@@ -381,7 +386,8 @@
       <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-dong" onchange="toggleLayers()" checked> 서울시 동별 위험도 히트맵</label>
       <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-pipes" onchange="toggleLayers()" checked> 지하철 노선도 / 상하수도 노후 관로</label>
       <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-complaints" onchange="toggleLayers()" checked> 최근 민원 발생 위치 핀(Pin)</label>
-      <label style="cursor: pointer; color: #8b949e;"><input type="checkbox" id="chk-layer-points" onchange="toggleLayers()"> (기존) 과거 사고 이력 기둥</label>
+      <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-news" onchange="toggleLayers()" checked> 실시간 뉴스 기사 크롤링 (지하철/노후관)</label>
+      <label style="cursor: pointer; color: #8b949e;"><input type="checkbox" id="chk-layer-points" onchange="toggleLayers()"> 과거 싱크홀 발생 현황</label>
     </div>
   </div>
 </aside>
@@ -431,7 +437,7 @@
 <!-- 감쇠·점수화 엔진 (Python 동일 로직) -->
 <script src="js/sim.js?v=12"></script>
 <!-- 지도 렌더링 -->
-<script src="js/render.js?v=12"></script>
+<script src="js/render.js?v=14"></script>
 
 </body>
 </html>

@@ -13,7 +13,7 @@ const {DeckGL, PolygonLayer, GeoJsonLayer, MapView, PathLayer, ScatterplotLayer}
 let DECK, GRID_CFG, WEIGHTS_CFG;
 let GRID_CELLS = {}, SNAP_CELLS = {}, SIM_CELLS = {}, HISTORY_DATA = {}, SNAP_META = {};
 let DONG_GEOJSON = null, DONG_HISTORY = {};
-let NATIONWIDE_GEOJSON = null, PIPES_GEOJSON = null, COMPLAINTS_DATA = null;
+let NATIONWIDE_GEOJSON = null, PIPES_GEOJSON = null, COMPLAINTS_DATA = null, PIPE_PENALTIES = null, NEWS_ISSUES = null;
 
 let activeLayers = {
   nationwide: false,
@@ -21,7 +21,8 @@ let activeLayers = {
   dong: true,
   pipes: true,
   complaints: true,
-  points: false
+  points: false,
+  news: true
 };
 let playTimer = null, simElapsedH = 0;
 let autoRefreshTimer = null;
@@ -58,7 +59,7 @@ async function init() {
     });
 
     setLoading('데이터 로드 중…');
-    const [gridData, snapData, gridCfgData, weightsCfgData, parityData, historyData, dongGeoJson, dongHistory, nationwideGeoJson, pipesGeoJson, complaintsData] = await Promise.all([
+    const [gridData, snapData, gridCfgData, weightsCfgData, parityData, historyData, dongGeoJson, dongHistory, nationwideGeoJson, pipesGeoJson, complaintsData, pipePenalties, newsIssuesData] = await Promise.all([
       fetchJSON(`data/grid.json?t=${Date.now()}`),
       fetchJSON(`data/snapshot_calm.json?t=${Date.now()}`),
       fetchJSON(`data/grid_cfg.json?t=${Date.now()}`),
@@ -69,7 +70,9 @@ async function init() {
       fetchJSON(`data/dong_history.json?t=${Date.now()}`).catch(() => ({})),
       fetchJSON(`https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea_provinces_geo_simple.json`).catch(() => null),
       fetchJSON(`data/mock_pipes.geojson?t=${Date.now()}`).catch(() => null),
-      fetchJSON(`data/mock_complaints.json?t=${Date.now()}`).catch(() => null)
+      fetchJSON(`data/mock_complaints.json?t=${Date.now()}`).catch(() => null),
+      fetchJSON(`data/pipe_penalties.json?t=${Date.now()}`).catch(() => null),
+      fetchJSON(`data/news_issues.json?t=${Date.now()}`).catch(() => null)
     ]);
 
     GRID_CFG = gridCfgData;
@@ -80,6 +83,8 @@ async function init() {
     if (nationwideGeoJson) NATIONWIDE_GEOJSON = nationwideGeoJson;
     if (pipesGeoJson) PIPES_GEOJSON = pipesGeoJson;
     if (complaintsData) COMPLAINTS_DATA = complaintsData;
+    if (pipePenalties) PIPE_PENALTIES = pipePenalties;
+    if (newsIssuesData) NEWS_ISSUES = newsIssuesData.issues;
 
     for (const c of gridData.cells) {
       GRID_CELLS[c.id] = { lat: c.lat, lon: c.lon, gu: c.gu };
@@ -150,7 +155,7 @@ function updateDeckGLLayer() {
     getPolygon: d => d.polygon,
     // 높이: 점수 1점당 80m (100점 = 8000m)
     getElevation: d => {
-      if (historyMode === 'points' && HISTORY_DATA[d.id]) return 100 * 80; // 과거 이력 구역은 최고 높이 고정
+      if (historyMode === 'points' && HISTORY_DATA[d.id]) return 1; // 과거 이력 구역 높이 1미터 (평면 수준)
       return d.score * 80;
     },
     getFillColor: d => {
@@ -261,6 +266,30 @@ function updateDeckGLLayer() {
     }));
   }
 
+  if (activeLayers.news && NEWS_ISSUES) {
+    const newsLayer = new ScatterplotLayer({
+      id: 'news-issues-layer',
+      data: NEWS_ISSUES,
+      pickable: true,
+      opacity: 0.8,
+      stroked: true,
+      filled: true,
+      radiusScale: 100,
+      radiusMinPixels: 6,
+      radiusMaxPixels: 20,
+      lineWidthMinPixels: 2,
+      getPosition: d => [d.lon, d.lat],
+      getFillColor: d => [255, 60, 60, 220],
+      getLineColor: [255, 255, 255],
+      onClick: info => {
+        if (info.object) {
+          window.open(info.object.link, '_blank');
+        }
+      }
+    });
+    layers.push(newsLayer);
+  }
+
   DECK.setProps({ layers: layers });
 
 }
@@ -272,6 +301,8 @@ window.toggleLayers = () => {
   activeLayers.pipes = document.getElementById('chk-layer-pipes').checked;
   activeLayers.complaints = document.getElementById('chk-layer-complaints').checked;
   activeLayers.points = document.getElementById('chk-layer-points').checked;
+  const newsEl = document.getElementById('chk-layer-news');
+  if (newsEl) activeLayers.news = newsEl.checked;
   historyMode = activeLayers.points ? 'points' : 'off';
   updateDeckGLLayer();
 };
@@ -297,6 +328,20 @@ function getTooltipContent({object, layer}) {
   }
   if (layer && layer.id === 'complaints-layer') {
     return { html: `<div style="padding: 10px; background: rgba(0,0,0,0.8); color: white; border-radius: 4px;">⚠️ 민원 접수: ${object.type}<br>긴급도: ${object.urgency}단계</div>` };
+  }
+  if (layer && layer.id === 'news-issues-layer') {
+    return {
+      html: `
+        <div style="font-family:'Noto Sans KR', sans-serif; font-size: 13px; color: #fff; background: rgba(255, 60, 60, 0.9); padding: 12px; border-radius: 6px; border: 1px solid #ff7a7a; min-width: 220px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+          <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 6px;">
+            📰 실시간 뉴스 및 이슈
+          </div>
+          <div style="font-weight: 500; margin-bottom: 4px;">${object.title}</div>
+          <div style="font-size: 12px; color: rgba(255,255,255,0.9); line-height: 1.4;">${object.description}</div>
+          <div style="margin-top: 8px; font-size: 11px; color: rgba(255,255,255,0.6);">클릭하여 기사 보기</div>
+        </div>
+      `
+    };
   }
   if (layer && layer.id === 'dong-geojson-layer') {
     const dongName = object.properties.adm_nm;
@@ -381,6 +426,15 @@ async function onScenarioChange(e) {
   document.getElementById('btn-play').textContent = '▶ 재생';
   document.getElementById('btn-play').classList.remove('active');
 
+  const expEl = document.getElementById('sim-explanation');
+  if (expEl) {
+    if (scenario === 'extreme') {
+      expEl.style.display = 'block';
+    } else {
+      expEl.style.display = 'none';
+    }
+  }
+
   try {
     setLoading(`${scenario} 시나리오 로드 중…`);
     const snapData = await fetchJSON(`data/snapshot_${scenario}.json`);
@@ -453,10 +507,13 @@ function applySimDecay(elapsedH) {
     const id = +idStr, sim = SIM_CELLS[id];
     if (!sim) continue;
     
-    // 과거 사고 이력이 있으면 기저 위험도(b)에 페널티(+20)를 줌
+    // 과거 사고 이력 및 파이프/지하철 인접 여부에 따라 기저 위험도(b) 페널티 부여
     let adjustedSim = { ...sim };
     if (HISTORY_DATA[id]) {
       adjustedSim.b = Math.min(adjustedSim.b + 20, 100);
+    }
+    if (PIPE_PENALTIES && PIPE_PENALTIES[id]) {
+      adjustedSim.b = Math.min(adjustedSim.b + PIPE_PENALTIES[id], 100);
     }
     
     const res = SinkholeEngine.computeAll(adjustedSim, elapsedH, GRID_CFG, WEIGHTS_CFG);
