@@ -2,28 +2,28 @@
   "issues": [
     {
       "title": "[단독] 9호선 공사 지연 연장... 지반 침하 우려",
-      "link": "https://news.naver.com",
+      "link": "https://search.naver.com/search.naver?where=news&query=9호선+공사+지반+침하",
       "description": "9호선 4단계 연장 공사 구간에서 지반 약화 징후가 발견되어 공사가 일시 중단되었습니다.",
       "type": "subway_construction"
     },
     {
       "title": "삼성역 환승센터 철근 빠짐 논란... 안전 진단 시급",
-      "link": "https://news.naver.com",
+      "link": "https://search.naver.com/search.naver?where=news&query=삼성역+환승센터+철근",
       "description": "영동대로 복합환승센터(삼성역) 지하 공사 현장에서 철근 누락이 발견되어...",
       "type": "subway_construction"
     },
     {
       "title": "종로구 노후 상수도관 파열... 일대 도로 통제",
-      "link": "https://news.naver.com",
+      "link": "https://search.naver.com/search.naver?where=news&query=종로구+상수도관+파열",
       "description": "어젯밤 종로구 인근에서 30년 넘은 노후 상수도관이 파열되어 도로가 침수되었습니다.",
       "type": "pipe_issue"
     },
     {
       "title": "수도권 집중호우... 지반 침하 및 싱크홀 우려",
-      "link": "https://news.naver.com",
+      "link": "https://search.naver.com/search.naver?where=news&query=서울+집중호우+싱크홀",
       "description": "밤사이 내린 폭우로 인해 서울 도심 곳곳에서 지반 침하 징후가 보고되고 있습니다.",
       "type": "weather"
     }
   ],
-  "updated_at": "2026-09-14T05:06:16.427646"
+  "updated_at": "2026-09-14T05:55:24.844097"
 }
