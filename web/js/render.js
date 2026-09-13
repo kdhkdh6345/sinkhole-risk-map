@@ -92,7 +92,6 @@ async function init() {
 
     // 뉴스 렌더링
     renderNewsFeed();
-    }
 
     applySnapshot(snapData);
     updateDeckGLLayer();
