@@ -673,3 +673,25 @@ function approveLlmDraft() {
   alert("재난 문자 발송이 승인되었습니다. (데모)");
   closeLlmPanel();
 }
+
+// ── 뉴스 피드 렌더링 ──────────────────────────────────────────────────
+function renderNewsFeed() {
+  const container = document.getElementById('news-feed-list');
+  if (!container) return;
+
+  if (!NEWS_ISSUES || NEWS_ISSUES.length === 0) {
+    container.innerHTML = `<div style="text-align: center; color: #8b949e; padding: 10px;">관련 뉴스가 없습니다.</div>`;
+    return;
+  }
+
+  let html = '';
+  NEWS_ISSUES.forEach(item => {
+    html += `
+      <div style="background: #0d1117; padding: 10px; border-radius: 6px; border: 1px solid #30363d;">
+        <a href="${item.link}" target="_blank" style="color: #58a6ff; font-weight: bold; text-decoration: none; display: block; margin-bottom: 4px;">${item.title}</a>
+        <div style="color: #8b949e; font-size: 0.75rem; line-height: 1.4;">${item.description}</div>
+      </div>
+    `;
+  });
+  container.innerHTML = html;
+}
