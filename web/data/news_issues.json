@@ -1,6 +1,12 @@
 {
   "issues": [
     {
+      "title": "금융위, 기후금융 활성화 TF 첫 회의…2035년까지 790조 원 공급계획",
+      "link": "<![CDATA[https://news.sbs.co.kr/news/endPage.do?news_id=N1008752046&plink=RSSLINK&cooper=RSSREADER]]>",
+      "description": "&#9650; 금융위원회정부가 국가 온실가스 감축 목표 달성과 탄소 감축 활동을 위한 기후금융 지원에 박차를 가합니다.금융위원회는 전요섭 금융정...",
+      "type": "news"
+    },
+    {
       "title": "[단독] 9호선 공사 지연 연장... 지반 침하 우려",
       "link": "https://search.naver.com/search.naver?where=news&query=9호선+공사+지반+침하",
       "description": "9호선 4단계 연장 공사 구간에서 지반 약화 징후가 발견되어 공사가 일시 중단되었습니다.",
@@ -25,5 +31,5 @@
       "type": "weather"
     }
   ],
-  "updated_at": "2026-09-14T05:01:44.293400"
+  "updated_at": "2026-09-14T10:33:26.047060"
 }
