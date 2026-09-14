@@ -2,7 +2,12 @@ import os
 import json
 import numpy as np
 import pandas as pd
-from scipy.spatial import cKDTree
+
+try:
+    from scipy.spatial import cKDTree
+    _SCIPY_AVAILABLE = True
+except ImportError:
+    _SCIPY_AVAILABLE = False
 
 from .base import TrafficSourceAdapter
 
@@ -44,9 +49,18 @@ class SeoulTrafficSource(TrafficSourceAdapter):
                 link_congestion.append(ratio)
                 
             if link_coords:
-                tree = cKDTree(link_coords)
+                link_coords_np = np.array(link_coords)
                 grid_coords = np.column_stack((grid_df['lat'].values, grid_df['lon'].values))
-                distances, indices = tree.query(grid_coords, k=1)
+                
+                if _SCIPY_AVAILABLE:
+                    tree = cKDTree(link_coords_np)
+                    distances, indices = tree.query(grid_coords, k=1)
+                else:
+                    # scipy 없을 때: 브루트포스 (느리지만 정확)
+                    indices = np.argmin(
+                        np.sum((link_coords_np[None, :, :] - grid_coords[:, None, :]) ** 2, axis=2),
+                        axis=1,
+                    )
                 
                 link_congestion = np.array(link_congestion)
                 result[:] = link_congestion[indices]
