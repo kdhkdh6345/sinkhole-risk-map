@@ -467,11 +467,17 @@ async function onScenarioChange(e) {
   document.getElementById('btn-play').classList.remove('active');
 
   const expEl = document.getElementById('sim-explanation');
-  if (expEl) {
-    if (scenario === 'extreme') {
-      expEl.style.display = 'block';
-    } else {
-      expEl.style.display = 'none';
+  const expTextEl = document.getElementById('sim-exp-text');
+  if (expEl && expTextEl) {
+    expEl.style.display = 'block';
+    if (scenario === 'calm') {
+      expTextEl.innerHTML = '평상시 상태로, 기상청(강수량), GIMS(지하수위), TOPIS(교통량) 등 <b>실시간 관측 데이터를 기반으로 측정되어 업데이트 되는 현재의 값</b>을 표현합니다. (랜덤 시뮬레이션 아님)';
+    } else if (scenario === 'heavy_rain') {
+      expTextEl.innerHTML = '호우경보급 강수가 일부 자치구에 집중된 상황을 가정한 시뮬레이션으로, <b>시간 진행(재생)에 따른 지반 회복(감쇠) 과정</b>을 보여줍니다.';
+    } else if (scenario === 'extreme') {
+      expTextEl.innerHTML = '극한호우 및 지하수위 급락이 동시에 발생한 상황을 가정한 시뮬레이션입니다. <b>시간 진행(재생)에 따른 감쇠 과정</b>을 보여줍니다.';
+    } else if (scenario === 'historical_flood_2022') {
+      expTextEl.innerHTML = '2022년 8월 8일 동작구 및 강남 일대에 내린 기록적인 폭우 상황을 재현한 시뮬레이션입니다. <b>시간 진행(재생)에 따른 감쇠 과정</b>을 보여줍니다.';
     }
   }
 
@@ -511,9 +517,9 @@ function applySnapshot(snapData) {
 
     SIM_CELLS[c.id] = { 
       b: c.b, 
-      r_raw: (c.r === 0 ? baseNoise() : c.r) * noise(), 
-      g_raw: (c.g === 0 ? baseNoise() : c.g) * noise(), 
-      t_raw: (c.t === 0 ? baseNoise() : c.t) * noise() 
+      r_raw: currentScenario === 'calm' ? c.r : (c.r === 0 ? baseNoise() : c.r) * noise(), 
+      g_raw: currentScenario === 'calm' ? c.g : (c.g === 0 ? baseNoise() : c.g) * noise(), 
+      t_raw: currentScenario === 'calm' ? c.t : (c.t === 0 ? baseNoise() : c.t) * noise() 
     };
   }
 }
@@ -615,9 +621,9 @@ function simReset() {
     if (!orig) continue;
     SIM_CELLS[id] = {
       b: orig.b,
-      r_raw: (orig.r === 0 ? baseNoise() : orig.r) * noise(),
-      g_raw: (orig.g === 0 ? baseNoise() : orig.g) * noise(),
-      t_raw: (orig.t === 0 ? baseNoise() : orig.t) * noise()
+      r_raw: currentScenario === 'calm' ? orig.r : (orig.r === 0 ? baseNoise() : orig.r) * noise(),
+      g_raw: currentScenario === 'calm' ? orig.g : (orig.g === 0 ? baseNoise() : orig.g) * noise(),
+      t_raw: currentScenario === 'calm' ? orig.t : (orig.t === 0 ? baseNoise() : orig.t) * noise()
     };
   }
   
