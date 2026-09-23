@@ -80,6 +80,7 @@ class GridRiskField:
         self._r_scores = np.zeros(N, dtype=np.float64)
         self._g_scores = np.zeros(N, dtype=np.float64)
         self._t_scores = np.zeros(N, dtype=np.float64)
+        self._g_sigma_raw = np.zeros(N, dtype=np.float64)  # Phase 7-2 잔차 저장용
 
         # 이벤트 타임스탬프 (가상 시각, 초 단위)
         self._r_event_time = np.full(N, t0, dtype=np.float64)
@@ -129,6 +130,7 @@ class GridRiskField:
                 self._weights_cfg,
             )
             self._g_scores = g_new
+            self._g_sigma_raw = sigma_raw
             self._g_event_time = np.full(len(self.grid_df), t_now)
             self.source_status["groundwater"] = "ok"
         except Exception as e:
@@ -185,6 +187,9 @@ class GridRiskField:
         kst = timezone(timedelta(hours=9))
         generated_at = datetime.now(tz=kst).isoformat(timespec="seconds")
 
+        # ai_anomaly 판별 (Phase 7-2: 예측 잔차가 2.5σ 초과 시 이상으로 간주)
+        ai_anomaly_arr = np.abs(self._g_sigma_raw) > 2.5
+
         # cells 배열 구성 (벡터 연산 후 list 변환)
         ids = self.grid_df["id"].tolist()
         cells = [
@@ -197,6 +202,7 @@ class GridRiskField:
                 "g": round(float(g_dec[i]), 2),
                 "t": round(float(t_dec[i]), 2),
                 "unc": round(float(unc_arr[i]), 4) if not np.isnan(unc_arr[i]) else None,
+                "ai_anomaly": bool(ai_anomaly_arr[i]),
             }
             for i in range(len(ids))
         ]

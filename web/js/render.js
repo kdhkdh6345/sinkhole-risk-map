@@ -21,6 +21,7 @@ let activeLayers = {
   dong: true,
   pipes: true,
   complaints: true,
+  ai_anomaly: true,
   points: false,
   news: true
 };
@@ -328,7 +329,23 @@ function updateDeckGLLayer() {
     }));
   }
 
-
+  // ── AI Prediction Residual Anomaly Layer (Phase 7-2) ──
+  if (activeLayers.ai_anomaly && SNAP_CELLS && GRID_CELLS) {
+    const anomalyData = Object.values(SNAP_CELLS).filter(c => c.ai_anomaly && GRID_CELLS[c.id]);
+    if (anomalyData.length > 0) {
+      layers.push(new ScatterplotLayer({
+        id: 'ai-anomaly-layer',
+        data: anomalyData,
+        getPosition: d => [GRID_CELLS[d.id].lon, GRID_CELLS[d.id].lat],
+        getFillColor: [255, 0, 0, 255],
+        getLineColor: [255, 255, 255, 255],
+        lineWidthMinPixels: 2,
+        getRadius: 250,
+        pickable: true,
+        onClick: handleGridClick
+      }));
+    }
+  }
 
   DECK.setProps({ layers: layers });
 
@@ -340,6 +357,10 @@ window.toggleLayers = () => {
   activeLayers.dong = document.getElementById('chk-layer-dong').checked;
   activeLayers.pipes = document.getElementById('chk-layer-pipes').checked;
   activeLayers.complaints = document.getElementById('chk-layer-complaints').checked;
+  
+  const anomalyEl = document.getElementById('chk-layer-ai-anomaly');
+  if (anomalyEl) activeLayers.ai_anomaly = anomalyEl.checked;
+  
   activeLayers.points = document.getElementById('chk-layer-points').checked;
   const newsEl = document.getElementById('chk-layer-news');
   if (newsEl) activeLayers.news = newsEl.checked;
@@ -365,6 +386,9 @@ function getTooltipContent({object, layer}) {
 
   if (layer && layer.id === 'pipes-layer') {
     return { html: `<div style="padding: 10px; background: rgba(0,0,0,0.8); color: white; border-radius: 4px;">📍 ${object.properties.name} (${object.properties.type})</div>` };
+  }
+  if (layer && layer.id === 'ai-anomaly-layer') {
+    return { html: `<div style="padding: 10px; background: rgba(0,0,0,0.8); color: white; border-radius: 4px; border: 1px solid red;">🚨 <b>AI 예측 이상탐지 (Prediction Residual)</b><br>예측된 정상 패턴(수위 변동률 등)에서 크게 벗어남</div>` };
   }
   if (layer && layer.id === 'complaints-layer') {
     return { html: `<div style="padding: 10px; background: rgba(0,0,0,0.8); color: white; border-radius: 4px;">⚠️ 민원 접수: ${object.type}<br>긴급도: ${object.urgency}단계</div>` };
