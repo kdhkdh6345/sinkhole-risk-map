@@ -68,13 +68,36 @@ const SinkholeEngine = (() => {
     return 1;
   }
 
+  function bayesianFuse(b, r, g, t, variances) {
+    const v = variances || { b: 4.0, r: 9.0, g: 25.0, t: 36.0 };
+    const w_b = 1.0 / v.b;
+    const w_r = 1.0 / v.r;
+    const w_g = 1.0 / v.g;
+    const w_t = 1.0 / v.t;
+
+    let weightedSum = w_b * b;
+    let totalWeight = w_b;
+
+    if (r !== null && !isNaN(r)) { weightedSum += w_r * r; totalWeight += w_r; }
+    if (g !== null && !isNaN(g)) { weightedSum += w_g * g; totalWeight += w_g; }
+    if (t !== null && !isNaN(t)) { weightedSum += w_t * t; totalWeight += w_t; }
+
+    const score = Math.min(Math.max(weightedSum / totalWeight, 0), 100);
+    const unc = Math.sqrt(1.0 / totalWeight);
+
+    return { score, unc };
+  }
+
   function computeAll(cell, elapsedH, gridCfg, weightsCfg) {
     const factor = decayFactor(elapsedH, gridCfg);
     const r = cell.r_raw * factor;
     const g = cell.g_raw * factor;
     const t = cell.t_raw * factor;
-    const score = Math.min(cell.b + r + g + t, 100);
-    return { score, stage: computeStage(cell.b, r, g, weightsCfg), r, g, t, b: cell.b };
+    
+    // Phase 7-1: 베이지안 융합 적용
+    const { score, unc } = bayesianFuse(cell.b, r, g, t, weightsCfg.variances);
+    
+    return { score, stage: computeStage(cell.b, r, g, weightsCfg), r, g, t, b: cell.b, unc };
   }
 
   function validateParity(cases, gridCfg, weightsCfg) {
@@ -83,7 +106,7 @@ const SinkholeEngine = (() => {
       const r = c.r_raw * factor;
       const g = c.g_raw * factor;
       const t = c.t_raw * factor;
-      const score = Math.min(c.b + r + g + t, 100);
+      const { score } = bayesianFuse(c.b, r, g, t, weightsCfg.variances);
       const stage = computeStage(c.b, r, g, weightsCfg);
       const scoreDiff = Math.abs(score - c.score);
       return {
@@ -96,5 +119,5 @@ const SinkholeEngine = (() => {
     });
   }
 
-  return { decayFactor, applyDecay, computeR, computeG, computeT, computeStage, computeAll, validateParity };
+  return { decayFactor, applyDecay, computeR, computeG, computeT, computeStage, bayesianFuse, computeAll, validateParity };
 })();
