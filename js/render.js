@@ -718,7 +718,7 @@ function handleGridClick(info) {
   document.getElementById('llm-output').innerHTML = '작성 시작을 눌러주세요.';
   document.getElementById('llm-output').style.color = '#8b949e';
   
-  if (info.layer.id === 'pipes-layer') {
+  if (info.layer.id === 'subway-layer' || info.layer.id === 'pipe-layer') {
     selectedGridInfo = { type: 'pipe', name: info.object.properties.name, ptype: info.object.properties.type };
     document.getElementById('llm-target-info').innerHTML = `📍 <b>${selectedGridInfo.name}</b> (노후도/안전 등급 분석)`;
   } else if (info.layer.id === 'complaints-layer') {
@@ -729,6 +729,10 @@ function handleGridClick(info) {
     const history = DONG_HISTORY[dongName] || { count: 0, grade: 1 };
     selectedGridInfo = { type: 'dong', name: dongName, grade: history.grade, count: history.count };
     document.getElementById('llm-target-info').innerHTML = `📍 <b>${dongName}</b> (과거 ${history.count}건 발생)`;
+  } else if (info.layer.id === 'ai-anomaly-layer') {
+    const { id, gu, score, stage } = info.object;
+    selectedGridInfo = { type: 'ai', id, gu, score, stage };
+    document.getElementById('llm-target-info').innerHTML = `📍 <b>${gu || '특정 지역'}</b> (AI 예측 이상탐지 발생!)`;
   } else {
     const { id, gu, score, b, r, g, t, stage } = info.object;
     selectedGridInfo = { type: 'grid', id, gu, score, b, r, g, t, stage };
@@ -757,6 +761,10 @@ function generateLlmDraft() {
     draftText = `[안전안내문자]
 최근 ${selectedGridInfo.name} 주변 노후 인프라(관로/지하철)에서 지반 침하 위험이 분석되었습니다.
 해당 구간 통행 시 우회해 주시고 지반 이상 징후 발견 시 120으로 즉시 신고 바랍니다.`;
+  } else if (selectedGridInfo.type === 'ai') {
+    draftText = `[긴급재난문자]
+AI 예측 시스템 분석 결과, ${selectedGridInfo.gu || '해당 지역'}에서 지하수위의 비정상적 변동 등 심각한 싱크홀 징후가 감지되었습니다.
+주민 여러분께서는 신속히 안전한 곳으로 대피하시고, 지하차도 및 이면도로 진입을 전면 통제합니다.`;
   } else if (selectedGridInfo.type === 'complaint') {
     draftText = `[긴급안내문자]
 인근 지역에 '${selectedGridInfo.name}' 민원이 다수 접수되어 지반 침하 및 포트홀 위험이 있습니다.

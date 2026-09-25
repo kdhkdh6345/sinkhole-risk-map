@@ -97,7 +97,10 @@ const SinkholeEngine = (() => {
     // Phase 7-1: 베이지안 융합 적용
     const { score, unc } = bayesianFuse(cell.b, r, g, t, weightsCfg.variances);
     
-    return { score, stage: computeStage(cell.b, r, g, weightsCfg), r, g, t, b: cell.b, unc };
+    // Phase 7-2: AI 잔차 이상탐지 (시간 흐름에 따라 감소하여 사라지도록 시뮬레이션)
+    const ai_anomaly = cell.ai_anomaly ? (factor > 0.45) : false;
+
+    return { score, stage: computeStage(cell.b, r, g, weightsCfg), r, g, t, b: cell.b, unc, ai_anomaly };
   }
 
   function validateParity(cases, gridCfg, weightsCfg) {
