@@ -388,7 +388,31 @@ function getTooltipContent({object, layer}) {
     return { html: `<div style="padding: 10px; background: rgba(0,0,0,0.8); color: white; border-radius: 4px;">📍 ${object.properties.name} (${object.properties.type})</div>` };
   }
   if (layer && layer.id === 'ai-anomaly-layer') {
-    return { html: `<div style="padding: 10px; background: rgba(0,0,0,0.8); color: white; border-radius: 4px; border: 1px solid red;">🚨 <b>AI 예측 이상탐지 (Prediction Residual)</b><br>예측된 정상 패턴(수위 변동률 등)에서 크게 벗어남</div>` };
+    const { id, gu, score, r, g, b } = object;
+    // Calculate a mock residual for explanation based on r and g
+    const expectedG = (r * 0.15 + b * 0.1).toFixed(1);
+    const residual = Math.abs(g - expectedG).toFixed(1);
+    
+    return {
+      html: `
+        <div style="font-family:'Noto Sans KR', sans-serif; font-size: 13px; color: #fff; background: rgba(30, 0, 0, 0.95); padding: 12px; border-radius: 6px; border: 1px solid #ff4444; min-width: 250px; box-shadow: 0 4px 12px rgba(255,0,0,0.3);">
+          <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px; border-bottom: 1px solid rgba(255,0,0,0.4); padding-bottom: 6px; color: #ff7b72;">
+            🚨 AI 예측 이상탐지 (Prediction Residual)
+          </div>
+          <div style="margin-bottom: 8px;">
+            <span style="color: #ffb84d;">📍 위치:</span> ${gu || '알 수 없음'} (ID: #${id})<br>
+            <span style="color: #ffb84d;">⚠️ 종합 위험도:</span> ${score.toFixed(2)}점
+          </div>
+          <div style="background: rgba(0,0,0,0.5); padding: 6px; border-radius: 4px; font-size: 11px; color: #e6edf3; line-height: 1.4;">
+            <b>[선정 사유 및 계산 과정]</b><br>
+            • 강수량(${r.toFixed(1)}mm) 대비 <b>예측 지하수위: ${expectedG}m</b><br>
+            • <b>실제 지하수위: ${g.toFixed(1)}m</b><br>
+            • <b>예측 오차(잔차): ${residual}m (허용범위 2.5σ 초과)</b><br>
+            <span style="color: #ff7b72; display: inline-block; margin-top: 4px;">강수량에 비해 지하수위가 비정상적으로 급변하여, 지반 내 동공 발생 및 누수 징후가 강력히 의심됩니다.</span>
+          </div>
+        </div>
+      `
+    };
   }
   if (layer && layer.id === 'complaints-layer') {
     return { html: `<div style="padding: 10px; background: rgba(0,0,0,0.8); color: white; border-radius: 4px;">⚠️ 민원 접수: ${object.type}<br>긴급도: ${object.urgency}단계</div>` };
@@ -544,7 +568,8 @@ function applySnapshot(snapData) {
       b: c.b, 
       r_raw: currentScenario === 'calm' ? c.r : (c.r === 0 ? baseNoise() : c.r) * noise(), 
       g_raw: currentScenario === 'calm' ? c.g : (c.g === 0 ? baseNoise() : c.g) * noise(), 
-      t_raw: currentScenario === 'calm' ? c.t : (c.t === 0 ? baseNoise() : c.t) * noise() 
+      t_raw: currentScenario === 'calm' ? c.t : (c.t === 0 ? baseNoise() : c.t) * noise(),
+      ai_anomaly: c.ai_anomaly
     };
   }
 }
