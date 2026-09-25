@@ -384,7 +384,7 @@ window.changeMapTheme = () => {
 function getTooltipContent({object, layer}) {
   if (!object) return null;
 
-  if (layer && layer.id === 'pipes-layer') {
+  if (layer && (layer.id === 'subway-layer' || layer.id === 'pipe-layer')) {
     return { html: `<div style="padding: 10px; background: rgba(0,0,0,0.8); color: white; border-radius: 4px;">📍 ${object.properties.name} (${object.properties.type})</div>` };
   }
   if (layer && layer.id === 'ai-anomaly-layer') {
@@ -424,6 +424,7 @@ function getTooltipContent({object, layer}) {
     };
   }
 
+  if (object.stage === undefined || object.score === undefined) return null;
   const {id, gu, stage, score, b, r, g, t, unc} = object;
   
   if (historyMode === 'points' && HISTORY_DATA[id]) {
