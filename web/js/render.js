@@ -758,6 +758,10 @@ function handleGridClick(info) {
     const { id, gu, score, stage } = info.object;
     selectedGridInfo = { type: 'ai', id, gu, score, stage };
     document.getElementById('llm-target-info').innerHTML = `📍 <b>${gu || '특정 지역'}</b> (AI 예측 이상탐지 발생!)`;
+  } else if (info.layer.id === 'history-layer') {
+    const histInfo = info.object.info;
+    selectedGridInfo = { type: 'history', location: histInfo.location, date: histInfo.date };
+    document.getElementById('llm-target-info').innerHTML = `📍 <b>과거 싱크홀 발생 지역</b>: ${histInfo.location}`;
   } else {
     const { id, gu, score, b, r, g, t, stage } = info.object;
     selectedGridInfo = { type: 'grid', id, gu, score, b, r, g, t, stage };
@@ -794,6 +798,10 @@ AI 예측 시스템 분석 결과, ${selectedGridInfo.gu || '해당 지역'}에�
     draftText = `[긴급안내문자]
 인근 지역에 '${selectedGridInfo.name}' 민원이 다수 접수되어 지반 침하 및 포트홀 위험이 있습니다.
 사고 예방을 위해 해당 도로 진입을 자제해 주시기 바랍니다.`;
+  } else if (selectedGridInfo.type === 'history') {
+    draftText = `[안전안내문자]
+과거 싱크홀 발생 이력이 있는 집중 관리 구간(${selectedGridInfo.location}) 입니다.
+현재 지하수위 등 이상 징후가 감지되고 있으니, 가급적 우회하시기 바랍니다.`;
   } else if (selectedGridInfo.type === 'dong') {
     if (selectedGridInfo.count >= 3) {
       draftText = `[안전안내문자]\n최근 ${selectedGridInfo.name} 일대에 지반 침하 이력이 다수 보고되었습니다.\n인근 차량 우회 및 보행자 안전에 유의하시고, 도로 갈라짐 발견 시 120으로 즉시 신고 바랍니다.`;
