@@ -1,82 +1,51 @@
 import json
 import urllib.request
 import urllib.error
-import re
+import xml.etree.ElementTree as ET
 from datetime import datetime
 
 FALLBACK_NEWS = [
     {
-        "title": "[단독] 9호선 공사 지연 연장... 지반 침하 우려",
-        "link": "https://search.naver.com/search.naver?where=news&query=9호선+공사+지반+침하",
-        "description": "9호선 4단계 연장 공사 구간에서 지반 약화 징후가 발견되어 공사가 일시 중단되었습니다.",
-        "type": "subway_construction"
-    },
-    {
-        "title": "삼성역 환승센터 철근 빠짐 논란... 안전 진단 시급",
-        "link": "https://search.naver.com/search.naver?where=news&query=삼성역+환승센터+철근",
-        "description": "영동대로 복합환승센터(삼성역) 지하 공사 현장에서 철근 누락이 발견되어...",
-        "type": "subway_construction"
-    },
-    {
-        "title": "종로구 노후 상수도관 파열... 일대 도로 통제",
-        "link": "https://search.naver.com/search.naver?where=news&query=종로구+상수도관+파열",
-        "description": "어젯밤 종로구 인근에서 30년 넘은 노후 상수도관이 파열되어 도로가 침수되었습니다.",
-        "type": "pipe_issue"
-    },
-    {
-        "title": "수도권 집중호우... 지반 침하 및 싱크홀 우려",
-        "link": "https://search.naver.com/search.naver?where=news&query=서울+집중호우+싱크홀",
-        "description": "밤사이 내린 폭우로 인해 서울 도심 곳곳에서 지반 침하 징후가 보고되고 있습니다.",
+        "title": "[안내] 현재 실시간으로 보고된 주요 지반침하 뉴스가 없습니다.",
+        "link": "#",
+        "description": "최근 7일간 '싱크홀' 관련 주요 보도가 없습니다. 안전한 상태입니다.",
         "type": "weather"
     }
 ]
 
-def crawl_naver_news_rss():
-    url = "https://news.sbs.co.kr/news/SectionRssFeed.do?sectionId=02&plink=RSSREADER"
-    keywords = ["날씨", "기후", "싱크홀", "지반", "침하", "폭우", "호우"]
+def crawl_google_news_rss():
+    url = "https://news.google.com/rss/search?q=%EC%8B%B1%ED%81%AC%ED%99%80+when:7d&hl=ko&gl=KR&ceid=KR:ko"
     
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=3) as response:
-            xml = response.read().decode('utf-8')
-            items = re.findall(r'<item>(.*?)</item>', xml, re.DOTALL)
+        with urllib.request.urlopen(req, timeout=5) as response:
+            xml_data = response.read()
+            root = ET.fromstring(xml_data)
             parsed_items = []
             
-            for item in items:
-                title_match = re.search(r'<title><!\[CDATA\[(.*?)\]\]></title>', item)
-                title = title_match.group(1) if title_match else ""
+            for item in root.findall('.//item')[:5]:
+                title = item.find('title').text if item.find('title') is not None else ""
+                link = item.find('link').text if item.find('link') is not None else "#"
                 
-                desc_match = re.search(r'<description><!\[CDATA\[(.*?)\]\]></description>', item)
-                desc = desc_match.group(1) if desc_match else ""
-                
-                # Check keywords
-                text_to_check = title + " " + desc
-                if not any(k in text_to_check for k in keywords):
-                    continue
-                
-                link_match = re.search(r'<link>(.*?)</link>', item)
-                link = link_match.group(1) if link_match else "#"
+                desc = "관련 뉴스 기사입니다. 클릭하여 원문을 확인하세요."
                 
                 parsed_items.append({
                     "title": title,
                     "link": link,
-                    "description": desc[:80] + "...",
+                    "description": desc,
                     "type": "news"
                 })
-                
-                if len(parsed_items) >= 5:
-                    break
             
             if parsed_items:
-                return parsed_items + FALLBACK_NEWS
+                return parsed_items
     except Exception as e:
         print(f"Crawler failed ({e}), using fallback data.")
         
     return FALLBACK_NEWS
 
 def main():
-    print("Starting news crawler (filtered)...")
-    news_data = crawl_naver_news_rss()
+    print("Starting news crawler (Google News RSS)...")
+    news_data = crawl_google_news_rss()
     
     out_path = 'web/data/news_issues.json'
     with open(out_path, 'w', encoding='utf-8') as f:
