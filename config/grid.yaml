@@ -15,9 +15,9 @@ expected_count: 2418  # 서울시 경계 교차 후 예상 격자 수 (수용 �
 # 감쇠 파라미터 (강수·지하수위·교통 세 채널 공용)
 # 근거: AGENTS.md 6절 "감쇠" 항목
 decay:
-  plateau_hours: 24        # 0~24h: factor = 1.0 (감쇠 없음)
-  tail_hours: 72           # 24~72h: 지수감쇠
-  residual_at_tail: 0.05   # 72h 시점 잔존 비율 (5%)
+  plateau_hours: 0         # 즉시 감쇠 시작
+  tail_hours: 96           # 슬라이더 끝(96h)까지 지속 감쇠
+  residual_at_tail: 0.01   # 96h 시점 잔존 비율 (1%)
   # 계산식: factor(t) = exp(k * (t - plateau_hours))
   # k = ln(residual_at_tail) / (tail_hours - plateau_hours)
-  # = ln(0.05) / 48 ≈ -0.0624
+  # = ln(0.01) / 96 ≈ -0.048

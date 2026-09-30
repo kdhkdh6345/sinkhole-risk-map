@@ -6,11 +6,11 @@ AGENTS.md 규칙:
    채널별로 별도 함수를 만들지 않는다."
 
 감쇠 공식 (AGENTS.md 6절, config/grid.yaml 파라미터):
-  plateau_hours = 24     # 0~24h: factor = 1.0 (감쇠 없음)
-  tail_hours    = 72     # 24~72h: 지수감쇠
-  residual      = 0.05   # 72h 시점 잔존 비율
+  plateau_hours = 0      # 즉시 감쇠 시작
+  tail_hours    = 96     # 0~96h: 지수감쇠
+  residual      = 0.01   # 96h 시점 잔존 비율
 
-  k = ln(residual) / (tail - plateau) = ln(0.05) / 48 ≈ -0.0624
+  k = ln(residual) / (tail - plateau) = ln(0.01) / 96 ≈ -0.048
 
   factor(t) =
     1.0                           if t <= plateau
@@ -43,9 +43,9 @@ def decay_factor(elapsed_hours: np.ndarray, cfg: dict) -> np.ndarray:
     채널별 별도 감쇠 함수를 만드는 것은 AGENTS.md 위반이다.
     """
     decay_cfg = cfg["decay"]
-    plateau: float = decay_cfg["plateau_hours"]   # 24h
-    tail: float = decay_cfg["tail_hours"]          # 72h
-    residual: float = decay_cfg["residual_at_tail"]  # 0.05
+    plateau: float = decay_cfg["plateau_hours"]   # 0h
+    tail: float = decay_cfg["tail_hours"]          # 96h
+    residual: float = decay_cfg["residual_at_tail"]  # 0.01
 
     # 지수감쇠 계수 k 계산
     # k = ln(residual) / (tail - plateau)
