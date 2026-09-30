@@ -122,20 +122,20 @@ class SimulatedGroundwaterAdapter(GroundwaterSourceAdapter):
                 sigma[i] = np.random.normal(0, 0.2)
 
         elif self._scenario == "heavy_rain":
-            # 강남4구 일대 소폭 급락 → G = 5 (1σ 하강)
+            # 강남4구 일대 급락 → G = 5 (2.6σ 하강, 일부 AI 이상탐지 발동)
             for i, gu in enumerate(grid_df["gu"]):
                 if gu in _HEAVY_RAIN_DISTRICTS:
-                    sigma[i] = np.random.normal(-1.2, 0.3)
-                else:
-                    sigma[i] = np.random.normal(0, 0.3)
-
-        elif self._scenario == "extreme":
-            # 2σ 이상 급락 → G = 10 (단, R >= 15 조건 별도 체크)
-            for i, gu in enumerate(grid_df["gu"]):
-                if gu in _EXTREME_DISTRICTS:
-                    sigma[i] = np.random.normal(-2.1, 0.4)
+                    sigma[i] = np.random.normal(-2.6, 0.3)
                 else:
                     sigma[i] = np.random.normal(-0.5, 0.3)
+
+        elif self._scenario == "extreme":
+            # 3σ 이상 급락 → G = 10 (대부분 AI 이상탐지 발동)
+            for i, gu in enumerate(grid_df["gu"]):
+                if gu in _EXTREME_DISTRICTS:
+                    sigma[i] = np.random.normal(-3.2, 0.4)
+                else:
+                    sigma[i] = np.random.normal(-1.0, 0.3)
                     
         elif self._scenario == "historical_flood_2022":
             # 토립자 유실로 인한 수위 폭락 (3σ 이상)
