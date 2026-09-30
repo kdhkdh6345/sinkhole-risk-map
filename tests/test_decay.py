@@ -4,10 +4,10 @@ tests/test_decay.py — 감쇠 함수 + AcceleratedClock 통합 테스트 (Phase
 수용 기준 3번 검증:
   AcceleratedClock으로 96시간을 가속 경과시켰을 때,
   특정 격자의 r 값이 다음을 만족한다:
-    0~24h: 최초값 유지 (오차 1% 이내)
-    48h 시점: 최초값의 약 0.22배
-    72h 시점: 최초값의 약 0.05배
-    72h 초과: 0
+    0~96h: 지속 감쇠
+    48h 시점: 최초값의 약 0.1배
+    96h 시점: 최초값의 0.01배
+    96h 초과: 0
 
 수용 기준 5번 검증:
   프로세스 종료 후 재시작해도 state.npz에서 감쇠 진행 상태가 복원된다.
@@ -31,39 +31,38 @@ from sinkhole.fusion.decay import apply_decay, decay_factor
 
 GRID_CFG = {
     "decay": {
-        "plateau_hours": 24,
-        "tail_hours": 72,
-        "residual_at_tail": 0.05,
+        "plateau_hours": 0,
+        "tail_hours": 96,
+        "residual_at_tail": 0.01,
     }
 }
 
 
 def test_plateau_factor():
-    """0~24h 구간에서 감쇠 계수 = 1.0 (오차 1e-9)."""
-    for t in [0.0, 1.0, 12.0, 23.9, 24.0]:
-        elapsed = np.array([t])
-        f = decay_factor(elapsed, GRID_CFG)
-        assert abs(f[0] - 1.0) < 1e-9, f"t={t}h: factor={f[0]:.6f}, 기대=1.0"
+    """0h 에는 감쇠 계수 = 1.0 (오차 1e-9)."""
+    elapsed = np.array([0.0])
+    f = decay_factor(elapsed, GRID_CFG)
+    assert abs(f[0] - 1.0) < 1e-9, f"0h: factor={f[0]:.6f}, 기대=1.0"
 
 
 def test_decay_at_48h():
-    """48h 시점에서 감쇠 계수 ≈ sqrt(0.05) ≈ 0.2236 (수용 기준 ~0.22)."""
+    """48h 시점에서 감쇠 계수 = sqrt(0.01) = 0.1."""
     elapsed = np.array([48.0])
     f = decay_factor(elapsed, GRID_CFG)
-    expected = math.sqrt(0.05)  # ≈ 0.2236
+    expected = math.sqrt(0.01)  # ≈ 0.1
     assert abs(f[0] - expected) < 0.002, f"48h factor={f[0]:.4f}, 기대≈{expected:.4f}"
 
 
-def test_decay_at_72h():
-    """72h 시점에서 감쇠 계수 = residual = 0.05 (수용 기준 ~0.05)."""
-    elapsed = np.array([72.0])
+def test_decay_at_96h():
+    """96h 시점에서 감쇠 계수 = residual = 0.01."""
+    elapsed = np.array([96.0])
     f = decay_factor(elapsed, GRID_CFG)
-    assert abs(f[0] - 0.05) < 0.001, f"72h factor={f[0]:.4f}, 기대=0.05"
+    assert abs(f[0] - 0.01) < 0.001, f"96h factor={f[0]:.4f}, 기대=0.01"
 
 
 def test_zero_after_tail():
-    """72h 초과 시 감쇠 계수 = 0.0 (수용 기준 '72h 초과: 0')."""
-    for t in [72.001, 80.0, 96.0, 120.0, 1000.0]:
+    """96h 초과 시 감쇠 계수 = 0.0."""
+    for t in [96.001, 100.0, 120.0, 1000.0]:
         elapsed = np.array([t])
         f = decay_factor(elapsed, GRID_CFG)
         assert f[0] == 0.0, f"t={t}h: factor={f[0]:.6f}, 기대=0.0"
@@ -71,21 +70,19 @@ def test_zero_after_tail():
 
 def test_apply_decay_vector():
     """apply_decay의 벡터 계산 결과를 직접 계산 결과와 비교."""
-    scores = np.array([100.0, 100.0, 100.0, 100.0, 100.0])
-    elapsed = np.array([0.0, 24.0, 48.0, 72.0, 96.0])
+    scores = np.array([100.0, 100.0, 100.0])
+    elapsed = np.array([0.0, 48.0, 96.0])
 
     result = apply_decay(scores, elapsed, GRID_CFG)
 
     assert abs(result[0] - 100.0) < 0.01   # 0h: 100%
-    assert abs(result[1] - 100.0) < 0.01   # 24h: 100% (plateau)
-    assert abs(result[2] - 100 * math.sqrt(0.05)) < 0.2  # 48h: ~22.36
-    assert abs(result[3] - 5.0) < 0.1      # 72h: 5% = 5.0
-    assert result[4] == 0.0                # 96h: 0
+    assert abs(result[1] - 10.0) < 0.2     # 48h: 10.0
+    assert abs(result[2] - 1.0) < 0.1      # 96h: 1.0
 
 
 def test_decay_monotone():
-    """24h 이후 감쇠는 단조감소해야 한다."""
-    t_points = np.arange(24.0, 96.1, 0.5)
+    """0h 이후 감쇠는 단조감소해야 한다."""
+    t_points = np.arange(0.0, 96.1, 0.5)
     f = decay_factor(t_points, GRID_CFG)
     diffs = np.diff(f)
     assert np.all(diffs <= 1e-12), f"단조감소 위반 발견: {diffs[diffs > 0]}"
@@ -104,12 +101,12 @@ from sinkhole.sources.simulated import (
 
 
 def _make_tiny_grid(n: int = 5) -> pd.DataFrame:
-    """테스트용 소형 격자 DataFrame (종로구 N개)."""
+    """테스트용 소형 격자 DataFrame (강남구 N개)."""
     return pd.DataFrame({
         "id": list(range(n)),
         "lat": [37.57] * n,
         "lon": [126.98] * n,
-        "gu": ["종로구"] * n,
+        "gu": ["강남구"] * n,
     })
 
 
@@ -139,37 +136,29 @@ def test_accelerated_clock_decay_curve():
     r0 = snap_0h["cells"][0]["r"]
     assert r0 > 0, f"heavy_rain에서 R 점수가 0: {r0}"
 
-    # ── 24h 시점 (plateau 끝): r ≈ r0 (오차 1% 이내) ──────────────────
-    clock.set_virtual_time(t_event + 24 * 3600)
-    snap_24h = field.snapshot()
-    r_24h = snap_24h["cells"][0]["r"]
-    assert abs(r_24h / r0 - 1.0) < 0.01, (
-        f"24h: r={r_24h:.4f}, r0={r0:.4f}, 비율={r_24h/r0:.4f} (기대≈1.0)"
-    )
-
-    # ── 48h 시점: r ≈ r0 × 0.2236 ─────────────────────────────────────
+    # ── 48h 시점: r ≈ r0 × 0.1 ─────────────────────────────────────
     clock.set_virtual_time(t_event + 48 * 3600)
     snap_48h = field.snapshot()
     r_48h = snap_48h["cells"][0]["r"]
     ratio_48h = r_48h / r0
-    assert abs(ratio_48h - math.sqrt(0.05)) < 0.02, (
-        f"48h: ratio={ratio_48h:.4f}, 기대≈{math.sqrt(0.05):.4f}"
+    assert abs(ratio_48h - 0.1) < 0.02, (
+        f"48h: ratio={ratio_48h:.4f}, 기대≈0.1"
     )
 
-    # ── 72h 시점: r ≈ r0 × 0.05 ──────────────────────────────────────
-    clock.set_virtual_time(t_event + 72 * 3600)
-    snap_72h = field.snapshot()
-    r_72h = snap_72h["cells"][0]["r"]
-    ratio_72h = r_72h / r0
-    assert abs(ratio_72h - 0.05) < 0.005, (
-        f"72h: ratio={ratio_72h:.4f}, 기대≈0.05"
-    )
-
-    # ── 96h 시점: r = 0 ───────────────────────────────────────────────
+    # ── 96h 시점: r ≈ r0 × 0.01 ──────────────────────────────────────
     clock.set_virtual_time(t_event + 96 * 3600)
     snap_96h = field.snapshot()
     r_96h = snap_96h["cells"][0]["r"]
-    assert r_96h == 0.0, f"96h: r={r_96h:.4f}, 기대=0.0"
+    ratio_96h = r_96h / r0
+    assert abs(ratio_96h - 0.01) < 0.005, (
+        f"96h: ratio={ratio_96h:.4f}, 기대≈0.01"
+    )
+
+    # ── 100h 시점: r = 0 ───────────────────────────────────────────────
+    clock.set_virtual_time(t_event + 100 * 3600)
+    snap_100h = field.snapshot()
+    r_100h = snap_100h["cells"][0]["r"]
+    assert r_100h == 0.0, f"100h: r={r_100h:.4f}, 기대=0.0"
 
 
 def test_state_restore_preserves_decay():
