@@ -1,26 +1,14 @@
 {
   "issues": [
     {
-      "title": "정신 차려보니 2.4m 아래...생일날 싱크홀 떨어진 여성 - 연합뉴스TV",
-      "link": "https://news.google.com/rss/articles/CBMiZ0FVX3lxTE94bnVtSmVuUUk1MlVUWHJJNElSUEZGRkFkamlvUFdqR0FEaVVENW9hTEJ3VlZ3bzZZS1E5YndYRkpnc2NJYnJ1QmM4WV9TajJqM2VoSGRXMmRsUkxfdWsyNWw3SlpWc1k?oc=5",
-      "description": "관련 뉴스 기사입니다. 클릭하여 원문을 확인하세요.",
-      "type": "news"
-    },
-    {
-      "title": "싱크홀 위험 ‘긴급공동’ 2곳 중 1곳 미복구 - hkbs.co.kr",
-      "link": "https://news.google.com/rss/articles/CBMiaEFVX3lxTE96Z3BXQlZ2d2MxVEdzX2NoSjBULTJYLVdmZ05BNEVTbkZDQk5tRHZlMm5ZUGpWRXRXYkNLQ296QWtmNkk4aE8xcXdwbDZldVcwYl9ld3JTTFlmWERYT3BOejk0LVVJN0d0?oc=5",
-      "description": "관련 뉴스 기사입니다. 클릭하여 원문을 확인하세요.",
-      "type": "news"
-    },
-    {
-      "title": "[국감,핀셋] 싱크홀 위험 ‘긴급공동’ 135곳 그대로…인천 3곳·경기 11곳 미복구 - 인천일보",
+      "title": "[국감, 핀셋] 싱크홀 위험 ‘긴급공동’ 135곳 그대로…인천 3곳·경기 11곳 미복구 - 인천일보",
       "link": "https://news.google.com/rss/articles/CBMicEFVX3lxTE55NmxnM1VLN0g1T2Z1Nl9wejlTclBaNXBBX1ltTDFuSC1RRjRxc3NUVWk0bXEwd252eFdmdmltYkpOUGh0X25BT2FoaThONVJMTG96bDRyNk5Cc0x0UEdWUlNKRS11TGZ4UENXWWdpdjM?oc=5",
       "description": "관련 뉴스 기사입니다. 클릭하여 원문을 확인하세요.",
       "type": "news"
     },
     {
-      "title": "싱크홀의 전조인 ‘긴급공동’, TK지역 절반이나 미복구 - v.daum.net",
-      "link": "https://news.google.com/rss/articles/CBMiT0FVX3lxTE9JbjVUeUtRQmI4NFVhc2V5dVJaam4yZUFJUWx0SGY2Wk83WC0teVIzV1VubzNrakxTVjJzUTRUYVBFbzJod1lCQXFYY0VDaGc?oc=5",
+      "title": "싱크홀 위험 ‘긴급공동’ 2곳 중 1곳 미복구 - 환경일보",
+      "link": "https://news.google.com/rss/articles/CBMiaEFVX3lxTE96Z3BXQlZ2d2MxVEdzX2NoSjBULTJYLVdmZ05BNEVTbkZDQk5tRHZlMm5ZUGpWRXRXYkNLQ296QWtmNkk4aE8xcXdwbDZldVcwYl9ld3JTTFlmWERYT3BOejk0LVVJN0d0?oc=5",
       "description": "관련 뉴스 기사입니다. 클릭하여 원문을 확인하세요.",
       "type": "news"
     },
@@ -29,7 +17,19 @@
       "link": "https://news.google.com/rss/articles/CBMiY0FVX3lxTE8wRm9ETEhnTG1KVDRJcGxYNWw4ZVFxdTFtLXZvQWQxWEFwUThxbEo5S2VNeURSSFQ5TWNnN1dVUFlPMXRZTVo5aHRGYjk3d2JvQ0RsUE5HUHByUFR5dWFzM1FzVQ?oc=5",
       "description": "관련 뉴스 기사입니다. 클릭하여 원문을 확인하세요.",
       "type": "news"
+    },
+    {
+      "title": "싱크홀 위험한데…전남광주 ‘땅 밑 구멍’ 그대로 - v.daum.net",
+      "link": "https://news.google.com/rss/articles/CBMiT0FVX3lxTFBQRjAweWdzZW9QOW01cmgyRmZwc2xPaWM0Sk5yNU5XTFFmQUZpRTh4R2ZvYkVidWlqRjhIOUIwZm1yWjl4aHkyQlV3d3NQaGs?oc=5",
+      "description": "관련 뉴스 기사입니다. 클릭하여 원문을 확인하세요.",
+      "type": "news"
+    },
+    {
+      "title": "전남광주 '긴급 싱크홀' 상당수 미복구…\"10월 중 우선 정비\"(종합) - 뉴스1",
+      "link": "https://news.google.com/rss/articles/CBMiX0FVX3lxTE81NFVMZkxOaV92RTljYjZPdXpMRjB6amdQTDFzVmVRdmRCNTVTSHpzUE8xOWhseDB6M1R6MlhUOWk2dHdaSFpSWUp0a1NRTDRmV2hYUTNkc2k5X0kzWG1B0gFkQVVfeXFMT3ZBeDFtODVubjlEZHFJOFFiTWl6VUtyY1J4SWRZYV9iazg5QjJrQk5qQldoM3RoQ3Fxa0NWWGp5Zk8ydmdoTjBzRVROYV8yajViZkZhcXJ4SGx3Y1JGRm4tRHFTMg?oc=5",
+      "description": "관련 뉴스 기사입니다. 클릭하여 원문을 확인하세요.",
+      "type": "news"
     }
   ],
-  "updated_at": "2026-09-30T23:07:53.378492"
+  "updated_at": "2026-10-01T02:09:28.472118"
 }
