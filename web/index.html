@@ -479,6 +479,12 @@
   <div style="position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); width: 100px; height: 4px; background: #fff; border-radius: 2px;"></div>
 </div>
 
+<!-- 커스텀 토스트 알림창 -->
+<div id="custom-toast" style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-50px); background: rgba(46, 160, 67, 0.95); color: #fff; padding: 12px 24px; border-radius: 30px; font-size: 0.9rem; font-weight: bold; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5); display: flex; align-items: center; gap: 10px; opacity: 0; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 10001; pointer-events: none; backdrop-filter: blur(4px);">
+  <span style="font-size: 1.2rem;">✅</span>
+  <span>재난문자가 성공적으로 전송되었습니다.</span>
+</div>
+
 <!-- MapLibre & Deck.gl JS -->
 <script src="https://unpkg.com/maplibre-gl@3.0.0/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/deck.gl@8.9.3/dist.min.js"></script>

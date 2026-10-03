@@ -853,11 +853,20 @@ AI 예측 시스템 분석 결과, ${selectedGridInfo.gu || '해당 지역'}에�
 }
 
 function approveLlmDraft() {
-  alert("재난문자가 성공적으로 전송되었습니다.");
-  
   // 사용자가 수정한 텍스트 가져오기
   const outputEl = document.getElementById('llm-output');
   const finalMessage = outputEl.innerText || outputEl.textContent;
+
+  // 브라우저 기본 alert 대신 커스텀 토스트 알림 띄우기
+  const toast = document.getElementById('custom-toast');
+  if (toast) {
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateX(-50%) translateY(0)';
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(-50%) translateY(-50px)';
+    }, 3000);
+  }
   
   closeLlmPanel();
   
