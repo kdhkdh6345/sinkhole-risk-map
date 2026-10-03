@@ -833,8 +833,29 @@ AI 예측 시스템 분석 결과, ${selectedGridInfo.gu || '해당 지역'}에�
 }
 
 function approveLlmDraft() {
-  alert("재난 문자 발송이 승인되었습니다. (데모)");
+  alert("재난문자가 성공적으로 전송되었습니다.");
   closeLlmPanel();
+  
+  // 가상 핸드폰 화면에 텍스트 넣기
+  const phonePopup = document.getElementById('phone-popup');
+  const phoneText = document.getElementById('phone-message-text');
+  const alertBox = document.getElementById('phone-alert-box');
+  const phoneTime = document.getElementById('phone-time');
+  
+  if (phonePopup && phoneText) {
+    phoneText.textContent = draftText;
+    
+    // 현재 시간 표시
+    const now = new Date();
+    phoneTime.textContent = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+    
+    // UI 표시 및 애니메이션
+    phonePopup.style.display = 'flex';
+    setTimeout(() => {
+      alertBox.style.opacity = '1';
+      alertBox.style.transform = 'translateY(20px)';
+    }, 100);
+  }
 }
 
 // ── 뉴스 피드 렌더링 ──────────────────────────────────────────────────
