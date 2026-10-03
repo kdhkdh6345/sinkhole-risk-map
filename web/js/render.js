@@ -828,12 +828,37 @@ AI 예측 시스템 분석 결과, ${selectedGridInfo.gu || '해당 지역'}에�
       clearInterval(llmTypingInterval);
       document.getElementById('btn-approve-llm').style.opacity = '1';
       document.getElementById('btn-approve-llm').style.pointerEvents = 'auto';
+      
+      // 타이핑 완료 후 수정 가능하도록 변경
+      outputEl.contentEditable = "true";
+      outputEl.style.outline = "none";
+      outputEl.style.borderColor = "#a371f7";
+      outputEl.style.cursor = "text";
+      outputEl.title = "클릭하여 문안을 수정할 수 있습니다.";
+      
+      // 사용자 안내 문구 추가
+      if (!document.getElementById('edit-hint')) {
+        const hint = document.createElement('div');
+        hint.id = 'edit-hint';
+        hint.style.fontSize = '0.7rem';
+        hint.style.color = '#8b949e';
+        hint.style.marginTop = '-5px';
+        hint.style.marginBottom = '10px';
+        hint.style.textAlign = 'right';
+        hint.innerText = '* 텍스트를 클릭하여 내용을 직접 수정할 수 있습니다.';
+        outputEl.parentNode.insertBefore(hint, outputEl.nextSibling);
+      }
     }
   }, 30);
 }
 
 function approveLlmDraft() {
   alert("재난문자가 성공적으로 전송되었습니다.");
+  
+  // 사용자가 수정한 텍스트 가져오기
+  const outputEl = document.getElementById('llm-output');
+  const finalMessage = outputEl.innerText || outputEl.textContent;
+  
   closeLlmPanel();
   
   // 가상 핸드폰 화면에 텍스트 넣기
@@ -843,7 +868,7 @@ function approveLlmDraft() {
   const phoneTime = document.getElementById('phone-time');
   
   if (phonePopup && phoneText) {
-    phoneText.textContent = draftText;
+    phoneText.textContent = finalMessage;
     
     // 현재 시간 표시
     const now = new Date();
