@@ -532,7 +532,7 @@ async function onScenarioChange(e) {
 
   try {
     setLoading(`${scenario} 시나리오 로드 중…`);
-    const snapData = await fetchJSON(`data/snapshot_${scenario}.json`);
+    const snapData = await fetchJSON(`data/snapshot_${scenario}.json?t=${Date.now()}`);
     applySnapshot(snapData);
     updateDeckGLLayer();
     updateHeader(SNAP_META, SNAP_CELLS);
