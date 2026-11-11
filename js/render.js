@@ -78,6 +78,7 @@ async function init() {
 
     GRID_CFG = gridCfgData;
     WEIGHTS_CFG = weightsCfgData;
+    updateStageLegend(WEIGHTS_CFG);
     if (historyData) HISTORY_DATA = historyData;
     if (dongGeoJson) DONG_GEOJSON = dongGeoJson;
     if (dongHistory) DONG_HISTORY = dongHistory;
@@ -388,27 +389,24 @@ function getTooltipContent({object, layer}) {
     return { html: `<div style="padding: 10px; background: rgba(0,0,0,0.8); color: white; border-radius: 4px;">📍 ${object.properties.name} (${object.properties.type})</div>` };
   }
   if (layer && layer.id === 'ai-anomaly-layer') {
-    const { id, gu, score, r, g, b } = object;
-    // Calculate a mock residual for explanation based on r and g
-    const expectedG = (r * 0.15 + b * 0.1).toFixed(1);
-    const residual = Math.abs(g - expectedG).toFixed(1);
-    
+    const { id, gu, score, gs } = object;
+    const thr = ((WEIGHTS_CFG || {}).anomaly || {}).sigma_threshold ?? 2.5;
+    const sigma = (gs ?? 0);
     return {
       html: `
         <div style="font-family:'Noto Sans KR', sans-serif; font-size: 13px; color: #fff; background: rgba(30, 0, 0, 0.95); padding: 12px; border-radius: 6px; border: 1px solid #ff4444; min-width: 250px; box-shadow: 0 4px 12px rgba(255,0,0,0.3);">
           <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px; border-bottom: 1px solid rgba(255,0,0,0.4); padding-bottom: 6px; color: #ff7b72;">
-            🚨 AI 예측 이상탐지 (Prediction Residual)
+            🚨 지하수위 이상탐지
           </div>
           <div style="margin-bottom: 8px;">
             <span style="color: #ffb84d;">📍 위치:</span> ${gu || '알 수 없음'} (ID: #${id})<br>
             <span style="color: #ffb84d;">⚠️ 종합 위험도:</span> ${score.toFixed(2)}점
           </div>
           <div style="background: rgba(0,0,0,0.5); padding: 6px; border-radius: 4px; font-size: 11px; color: #e6edf3; line-height: 1.4;">
-            <b>[선정 사유 및 계산 과정]</b><br>
-            • 강수량(${r.toFixed(1)}mm) 대비 <b>예측 지하수위: ${expectedG}m</b><br>
-            • <b>실제 지하수위: ${g.toFixed(1)}m</b><br>
-            • <b>예측 오차(잔차): ${residual}m (허용범위 2.5σ 초과)</b><br>
-            <span style="color: #ff7b72; display: inline-block; margin-top: 4px;">강수량에 비해 지하수위가 비정상적으로 급변하여, 지반 내 동공 발생 및 누수 징후가 강력히 의심됩니다.</span>
+            <b>[선정 기준]</b><br>
+            • 지하수위 σ 이상도: <b>${sigma.toFixed(2)}σ</b><br>
+            • 판정 기준: |σ| &gt; ${thr} (weights.yaml anomaly.sigma_threshold)<br>
+            <span style="color: #ff7b72; display: inline-block; margin-top: 4px;">평상시 변동 범위를 크게 벗어난 지하수위 변화가 관측(또는 시뮬레이션)되었습니다. 현장 확인이 필요합니다.</span>
           </div>
         </div>
       `
@@ -520,7 +518,7 @@ async function onScenarioChange(e) {
   if (expEl && expTextEl) {
     expEl.style.display = 'block';
     if (scenario === 'calm') {
-      expTextEl.innerHTML = '평상시 상태로, 기상청(강수량), GIMS(지하수위), TOPIS(교통량) 등 <b>실시간 관측 데이터를 기반으로 측정되어 업데이트 되는 현재의 값</b>을 표현합니다. (랜덤 시뮬레이션 아님)';
+      expTextEl.innerHTML = LIVE_MODE_TEXT;
     } else if (scenario === 'heavy_rain') {
       expTextEl.innerHTML = '호우경보급 강수가 일부 자치구에 집중된 상황을 가정한 시뮬레이션으로, <b>시간 진행(재생)에 따른 지반 회복(감쇠) 과정</b>을 보여줍니다.';
     } else if (scenario === 'extreme') {
@@ -556,25 +554,22 @@ function applySnapshot(snapData) {
 
   for (const c of snapData.cells) {
     SNAP_CELLS[c.id] = c;
-    ORIGINAL_RAW_CELLS[c.id] = { b: c.b, r: c.r, g: c.g, t: c.t };
+    ORIGINAL_RAW_CELLS[c.id] = { b: c.b, r: c.r, g: c.g, t: c.t, gs: c.gs ?? 0 };
     
-    // 초기 1회 랜덤성 부여
-    const noise = () => (Math.random() * 0.4 - 0.2) + 1; // 0.8 ~ 1.2
-    
-    // calm 시나리오에서도 미세한 변화를 주기 위해 최소 0.1~2 정도의 기본값을 더해줍니다.
-    const baseNoise = () => Math.random() * 2.0;
-
-    SIM_CELLS[c.id] = { 
-      b: c.b, 
-      r_raw: currentScenario === 'calm' ? c.r : (c.r === 0 ? baseNoise() : c.r) * noise(), 
-      g_raw: currentScenario === 'calm' ? c.g : (c.g === 0 ? baseNoise() : c.g) * noise(), 
-      t_raw: currentScenario === 'calm' ? c.t : (c.t === 0 ? baseNoise() : c.t) * noise(),
+    // 스냅샷 값을 그대로 시뮬레이션 초기값으로 사용한다.
+    // (이전 버전의 브라우저 측 무작위 노이즈는 Python 결과와의 일치를 깨뜨려 제거함)
+    SIM_CELLS[c.id] = {
+      b: c.b,
+      r_raw: c.r,
+      g_raw: c.g,
+      t_raw: c.t,
+      gs_raw: c.gs ?? 0,
       ai_anomaly: c.ai_anomaly
     };
   }
 }
 
-// ── 기능 2: 실시간 자동 갱신 (매 60초) ──────────────────────────────────
+// ── 기능 2: 스냅샷 자동 확인 (매 60초, 서버 갱신 주기는 workflow cron 참조) ──────────────────────────────────
 
 function startAutoRefresh() {
   autoRefreshTimer = setInterval(async () => {
@@ -618,15 +613,10 @@ function applySimDecay(elapsedH) {
     const id = +idStr, sim = SIM_CELLS[id];
     if (!sim) continue;
     
-    // 과거 사고 이력 및 파이프/지하철 인접 여부에 따라 기저 위험도(b) 페널티 부여
-    let adjustedSim = { ...sim };
-    if (HISTORY_DATA[id]) {
-      adjustedSim.b = Math.min(adjustedSim.b + 20, 100);
-    }
-    if (PIPE_PENALTIES && PIPE_PENALTIES[id]) {
-      adjustedSim.b = Math.min(adjustedSim.b + PIPE_PENALTIES[id], 100);
-    }
-    
+    // 기저점수 B는 Python(build_baseline.py)이 계산한 값을 그대로 쓴다.
+    // (이전 버전의 브라우저 전용 가산 — 과거 이력 +20, 관로 인접 +10 — 은
+    //  Python 계산과 불일치하고 가상 데이터에 의존해 제거함)
+    const adjustedSim = sim;
     const res = SinkholeEngine.computeAll(adjustedSim, elapsedH, GRID_CFG, WEIGHTS_CFG);
     SNAP_CELLS[id] = { ...snap, ...res, stage: res.stage };
   }
@@ -661,20 +651,12 @@ function simReset() {
   document.getElementById('btn-play').textContent = '▶ 재생';
   document.getElementById('btn-play').classList.remove('active');
   
-  // 초기화 시 매번 새로운 랜덤성 부여
-  const noise = () => (Math.random() * 0.4 - 0.2) + 1; // 0.8 ~ 1.2
-  const baseNoise = () => Math.random() * 2.0;
-
+  // 초기화: 스냅샷 원래 값으로 되돌린다 (무작위 노이즈 없음 → 매번 같은 결과)
   for (const idStr of Object.keys(SIM_CELLS)) {
     const id = +idStr;
     const orig = ORIGINAL_RAW_CELLS[id];
     if (!orig) continue;
-    SIM_CELLS[id] = {
-      b: orig.b,
-      r_raw: currentScenario === 'calm' ? orig.r : (orig.r === 0 ? baseNoise() : orig.r) * noise(),
-      g_raw: currentScenario === 'calm' ? orig.g : (orig.g === 0 ? baseNoise() : orig.g) * noise(),
-      t_raw: currentScenario === 'calm' ? orig.t : (orig.t === 0 ? baseNoise() : orig.t) * noise()
-    };
+    SIM_CELLS[id] = { b: orig.b, r_raw: orig.r, g_raw: orig.g, t_raw: orig.t, gs_raw: orig.gs };
   }
   
   applySimDecay(0);
@@ -691,8 +673,11 @@ function updateHeader(meta, cellsById) {
     else document.getElementById('stale-badge').style.display = 'none';
   }
   const modeEl = document.getElementById('mode-badge');
-  modeEl.textContent = meta.mode === 'real' ? '실시간' : '시뮬레이션';
-  modeEl.style.color = meta.mode === 'real' ? '#2ea043' : '#58a6ff';
+  // 'real' 모드라도 채널이 실제 API(ok)가 아니면 '샘플 데이터'로 표시한다.
+  const anyLive = Object.values(meta.source_status || {}).some(v => v === 'ok');
+  const label = meta.mode === 'real' ? (anyLive ? '실시간' : '샘플 데이터') : '시뮬레이션';
+  modeEl.textContent = label;
+  modeEl.style.color = label === '실시간' ? '#2ea043' : '#58a6ff';
   updateCounters(cellsById);
 }
 
@@ -707,12 +692,31 @@ function updateCounters(cellsById) {
   document.getElementById('chip-s3').style.boxShadow = s3 > 0 ? '0 0 8px rgba(218,54,51,.6)' : '';
 }
 
+const LIVE_MODE_TEXT = '현재 기본 모드는 <b>고정 샘플 데이터(data/fixtures)</b>로 계산한 값을 표시합니다. 기상청·GIMS·TOPIS 실시간 API 연동은 다음 단계 과제이며, 아래 데이터 소스 표시로 각 채널의 실제 상태를 확인할 수 있습니다.';
+
+const SOURCE_STATUS_LABEL = {
+  ok: '실시간',
+  fixture: '샘플 데이터',
+  sim: '시뮬레이션',
+  no_data: '데이터 없음',
+  unknown: '확인 중',
+};
+
 function updateSourceStatus(status) {
   for (const [key, short] of [['rain','rain'],['groundwater','gw'],['traffic','tr']]) {
     const st = (status || {})[key] || 'unknown';
     document.getElementById('dot-' + short).className = 'src-dot ' + (st === 'ok' ? 'ok' : st.startsWith('error') ? 'err' : 'unknown');
-    document.getElementById('st-' + short).textContent = st;
+    document.getElementById('st-' + short).textContent = SOURCE_STATUS_LABEL[st] || st;
   }
+}
+
+// 범례의 단계 기준값을 weights.yaml에서 읽어 표시한다 (화면 문구와 계산 기준 불일치 방지).
+function updateStageLegend(cfg) {
+  const st = (cfg || {}).stages || {};
+  const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+  if (st.stage1) set('cond-s1', `B≥${st.stage1.b_min}`);
+  if (st.stage2) set('cond-s2', `+R≥${st.stage2.r_min}`);
+  if (st.stage3) set('cond-s3', `+G≥${st.stage3.g_min}`);
 }
 
 // ── 유틸 ─────────────────────────────────────────────────────────────────

@@ -1,99 +1,46 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <title>Python-JS Parity Test</title>
-    <style>
-        body { font-family: monospace; }
-        .ok { color: green; }
-        .fail { color: red; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Python ↔ JS Parity 검증</title>
+  <style>
+    body { font-family: system-ui, 'Noto Sans KR', sans-serif; margin: 24px; background: #0d1117; color: #e6edf3; }
+    table { border-collapse: collapse; font-size: 13px; }
+    th, td { border: 1px solid #30363d; padding: 4px 8px; text-align: right; }
+    th { background: #161b22; }
+    .ok { color: #3fb950; } .fail { color: #f85149; font-weight: bold; }
+  </style>
 </head>
 <body>
-    <h1>Parity Test Results</h1>
-    <div id="output"></div>
-
-    <script type="module">
-        import { Simulator } from './js/sim.js';
-
-        async function runTests() {
-            const output = document.getElementById('output');
-            const log = (msg, isOk = true) => {
-                const div = document.createElement('div');
-                div.className = isOk ? 'ok' : 'fail';
-                div.innerText = msg;
-                output.appendChild(div);
-            };
-
-            try {
-                const configRes = await fetch('data/config.json');
-                const config = await configRes.json();
-                
-                const parityRes = await fetch('data/parity.json');
-                const parityData = await parityRes.json();
-                
-                const sim = new Simulator(config);
-                
-                let passed = 0;
-                let failed = 0;
-                
-                for (const item of parityData) {
-                    const input = item.input;
-                    const expected = item.expected;
-                    
-                    const cell = {
-                        id: item.id,
-                        b: input.b,
-                        gu: "test"
-                    };
-
-                    sim.getScenarioRawValues = () => ({
-                        rainArr: [input.r1, input.r3, input.r12],
-                        sigma: input.sigma,
-                        deg: input.deg
-                    });
-
-                    const result = sim.simulateCell(cell, input.elapsed_h, "custom");
-                    
-                    const EPSILON = 0.01;
-                    let isOk = true;
-                    let fails = [];
-                    
-                    const check = (key, val, exp) => {
-                        if (Math.abs(val - exp) >= EPSILON) {
-                            fails.push(`${key}: got ${val}, exp ${exp}`);
-                            isOk = false;
-                        }
-                    };
-
-                    check("r", result.r, expected.r);
-                    check("g", result.g, expected.g);
-                    check("t", result.t, expected.t);
-                    check("score", result.score, expected.score);
-                    
-                    if (result.stage !== expected.stage) {
-                        fails.push(`stage: got ${result.stage}, exp ${expected.stage}`);
-                        isOk = false;
-                    }
-
-                    if (isOk) {
-                        log(`[OK] ${item.desc}`);
-                        passed++;
-                    } else {
-                        log(`[FAIL] ${item.desc} - ${fails.join(', ')}`, false);
-                        failed++;
-                    }
-                }
-                
-                log(`\nResults: ${passed} passed, ${failed} failed`, failed === 0);
-
-            } catch (err) {
-                log(`Error: ${err.message}`, false);
-                console.error(err);
-            }
-        }
-
-        runTests();
-    </script>
+  <h2>Python ↔ JS 엔진 일치 검증</h2>
+  <p id="summary">계산 중…</p>
+  <table id="tbl"><thead><tr>
+    <th>케이스</th><th>경과(h)</th><th>Python 점수</th><th>JS 점수</th><th>차이</th>
+    <th>Python 단계</th><th>JS 단계</th><th>이상탐지 Py/JS</th><th>결과</th>
+  </tr></thead><tbody></tbody></table>
+  <script src="js/sim.js"></script>
+  <script>
+    (async () => {
+      const get = (u) => fetch(u + '?t=' + Date.now()).then(r => r.json());
+      const [parity, gridCfg, weightsCfg] = await Promise.all([
+        get('data/parity.json'), get('data/grid_cfg.json'), get('data/weights_cfg.json')
+      ]);
+      const res = SinkholeEngine.validateParity(parity.cases, gridCfg, weightsCfg);
+      const tbody = document.querySelector('#tbl tbody');
+      for (const r of res) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td style="text-align:left">${r.case}</td><td>${r.elapsed_h}</td>
+          <td>${r.py_score.toFixed(4)}</td><td>${r.js_score.toFixed(4)}</td><td>${r.score_diff.toFixed(6)}</td>
+          <td>${r.py_stage}</td><td>${r.js_stage}</td><td>${r.py_anomaly}/${r.js_anomaly}</td>
+          <td class="${r.ok ? 'ok' : 'fail'}">${r.ok ? '✅' : '❌'}</td>`;
+        tbody.appendChild(tr);
+      }
+      const pass = res.filter(r => r.ok).length;
+      const el = document.getElementById('summary');
+      el.textContent = `${pass}/${res.length} 통과`;
+      el.className = pass === res.length ? 'ok' : 'fail';
+    })();
+  </script>
 </body>
 </html>

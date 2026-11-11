@@ -115,7 +115,18 @@
       "r_min": 15
     },
     "stage3": {
-      "g_min": 10
+      "g_min": 8.0
     }
+  },
+  "fusion": {
+    "variances": {
+      "b": 4.0,
+      "r": 9.0,
+      "g": 25.0,
+      "t": 36.0
+    }
+  },
+  "anomaly": {
+    "sigma_threshold": 2.5
   }
 }
