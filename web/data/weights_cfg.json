@@ -104,7 +104,8 @@
       "consecutive_obs": 2,
       "history_days": 30,
       "stale_hours": 48,
-      "refresh_minutes": 30
+      "refresh_minutes": 60,
+      "fallback_hours": 6
     },
     "traffic": {
       "max": 5,
