@@ -102,6 +102,14 @@ def main() -> int:
         link_id = citydata_traffic(base)
         probe("서울시 실시간 도시데이터 — 장소코드(POI001)로 조회되는지 확인",
               f"{base}/json/citydata/1/5/POI001", n=300)
+
+        # 하수관로 수위 (서울 열린데이터광장 OA-2527, 30분 간격). 서비스명·인자 확인용 시험 호출
+        now = datetime.now(tz=KST)
+        t1 = (now - timedelta(hours=2)).strftime("%Y%m%d%H")
+        t2 = now.strftime("%Y%m%d%H")
+        probe("서울시 하수관로 수위 (인자 없음)", f"{base}/json/DrainpipeMonitoringInfo/1/5/", n=600)
+        probe("서울시 하수관로 수위 (구분코드 01, 최근 2시간)",
+              f"{base}/json/DrainpipeMonitoringInfo/1/5/01/{t1}/{t2}", n=1500)
         if link_id:
             probe(f"서울시 실시간 도로 소통 정보 (TrafficInfo, xml, 링크 {link_id})",
                   f"{base}/xml/TrafficInfo/1/5/{link_id}")
