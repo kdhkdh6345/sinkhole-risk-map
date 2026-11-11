@@ -5,7 +5,8 @@ on:
     branches:
       - main
   schedule:
-    - cron: '* * * * *' # Run every minute
+    # GitHub Actions 스케줄의 최소 간격은 5분이며, 실제 실행은 수 분~수십 분 지연될 수 있다.
+    - cron: '*/5 * * * *'
   workflow_dispatch: # Allow manual trigger
 
 jobs:
@@ -30,7 +31,18 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e .
         
+    - name: Check external APIs (진단 로그)
+      env:
+        KMA_API_KEY: ${{ secrets.KMA_API_KEY }}
+        SEOUL_API_KEY: ${{ secrets.SEOUL_API_KEY }}
+        GW_API_KEY: ${{ secrets.GW_API_KEY }}
+      run: python scripts/check_apis.py
+
     - name: Generate new snapshot
+      env:
+        KMA_API_KEY: ${{ secrets.KMA_API_KEY }}
+        SEOUL_API_KEY: ${{ secrets.SEOUL_API_KEY }}
+        GW_API_KEY: ${{ secrets.GW_API_KEY }}
       run: |
         # Fetch real-time news
         python scripts/crawl_news.py
@@ -40,23 +52,31 @@ jobs:
         python scripts/build_baseline.py
         
         # Generate the latest snapshot for all scenarios
+        # 기본 모드(--mode real): 강수는 기상청 실시간(AWS → ASOS → 샘플 순), 지하수위·교통은 샘플.
+        # 시뮬레이션 시나리오는 --seed 고정으로 매 실행 같은 결과를 낸다 (재현성).
         python scripts/run_snapshot.py --mode real
         mv web/data/snapshot.json web/data/snapshot_calm.json
-        python scripts/run_snapshot.py --mode sim --scenario heavy_rain
+        python scripts/run_snapshot.py --mode sim --scenario heavy_rain --seed 42
         mv web/data/snapshot.json web/data/snapshot_heavy_rain.json
-        python scripts/run_snapshot.py --mode sim --scenario extreme
+        python scripts/run_snapshot.py --mode sim --scenario extreme --seed 42
         mv web/data/snapshot.json web/data/snapshot_extreme.json
-        python scripts/run_snapshot.py --mode sim --scenario historical_flood_2022
+        python scripts/run_snapshot.py --mode sim --scenario historical_flood_2022 --seed 42
         mv web/data/snapshot.json web/data/snapshot_historical_flood_2022.json
         
         # Keep a default snapshot.json as well
         cp web/data/snapshot_calm.json web/data/snapshot.json
 
+    - name: Verify Python-JS parity
+      run: |
+        # 설정·엔진이 바뀌었는데 parity 케이스를 갱신하지 않았으면 여기서 실패한다.
+        python scripts/build_parity.py --check
+        node tests/run_parity.js
+
     - name: Commit and push if changed
       run: |
         git config --global user.name 'github-actions[bot]'
         git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-        git add web/data/snapshot*.json web/data/news_issues.json
+        git add web/data/snapshot*.json web/data/news_issues.json web/data/config.json web/data/weights_cfg.json web/data/grid_cfg.json
         git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update snapshot and news data" && git push)
 
     - name: Deploy to gh-pages
