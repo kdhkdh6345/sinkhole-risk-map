@@ -124,11 +124,11 @@ def main() -> int:
         # 주의: 현재 세 어댑터는 실제 API를 호출하지 않고 data/fixtures 고정 샘플을 읽는다.
         #       (source_status에 "fixture" 또는 "no_data"로 표시됨. 실제 API 연동은 Phase 6 과제)
         from sinkhole.sources.kma_live import KmaLiveRainSource
-        from sinkhole.sources.groundwater import SeoulGroundwaterSource
+        from sinkhole.sources.gw_live import GimsGroundwaterSource
         from sinkhole.sources.traffic_live import SeoulCitydataTrafficSource
         
         rain_adapter = KmaLiveRainSource()  # 기상청 AWS → ASOS → 샘플 순서로 시도
-        gw_adapter = SeoulGroundwaterSource()
+        gw_adapter = GimsGroundwaterSource()  # 국가지하수측정망 시간자료 (실패 시 샘플)
         traffic_adapter = SeoulCitydataTrafficSource()  # 서울 실시간 도시데이터 도로소통 (실패 시 샘플)
 
     t_start = time.perf_counter()

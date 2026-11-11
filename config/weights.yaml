@@ -74,6 +74,10 @@ realtime:
     min_rain_for_g: 15
     # 조건: 연속 관측 횟수 충족해야 인정 (센서 오류 필터)
     consecutive_obs: 2
+    # 실시간 (국가지하수측정자료조회서비스 시간자료, GIMS)
+    history_days: 30        # σ 계산에 쓰는 과거 기간 (AGENTS.md 6절: 최근 30일 평균 대비)
+    stale_hours: 48         # 마지막 관측이 이보다 오래되면 그 관측정은 제외
+    refresh_minutes: 30     # 관측정마다 호출하므로 30분마다만 새로 받는다 (자료 자체가 시간 단위)
 
   # 교통 T (0~5) — Phase 3까지 정적 프록시 사용
   traffic:
