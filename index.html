@@ -342,7 +342,7 @@
     <div class="sim-row">
       <label>시나리오</label>
       <select id="sel-scenario">
-        <option value="calm" selected>실시간 모드 (강수 실시간)</option>
+        <option value="calm" selected>실시간 모드 (강수·교통·지하수 실시간)</option>
         <option value="heavy_rain">호우경보 (heavy_rain)</option>
         <option value="extreme">극한호우 (extreme)</option>
         <option value="historical_flood_2022">2022년 폭우 (과거)</option>
@@ -360,7 +360,7 @@
     
     <div id="sim-explanation" style="margin-top: 10px; font-size: 0.8rem; color: #a0a0a0; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); display: block;">
       <div style="font-weight: bold; color: #fff; margin-bottom: 4px;">[시뮬레이션 진행 상황]</div>
-      <div id="sim-exp-text">실시간 모드입니다. <b>강수는 기상청 API허브 실시간 관측값</b>(연동 실패 시 샘플 데이터)을, 지하수위·교통은 현재 샘플 데이터를 사용합니다. 채널별 실제 상태는 아래 데이터 소스 표시에서 확인할 수 있습니다 (마우스를 올리면 상세 출처 표시).</div>
+      <div id="sim-exp-text">실시간 모드입니다. <b>강수는 기상청 AWS 실시간 관측</b>, <b>교통은 서울 실시간 도시데이터 도로소통</b>(주요 장소 주변, 30분 주기), <b>지하수위는 국가지하수측정망 시간자료</b>(서울 주변 관측정, 30분 주기)를 사용합니다. 연동에 실패한 채널은 샘플 데이터로 대체되며, 아래 데이터 소스 표시에서 실제 상태를 확인할 수 있습니다 (마우스를 올리면 상세 출처 표시).</div>
     </div>
   </div>
 
