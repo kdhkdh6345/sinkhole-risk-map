@@ -89,6 +89,7 @@ class GridRiskField:
 
         # 소스 상태 추적 (detail: 어떤 경로로 받았는지 사람이 읽는 설명)
         self.source_detail: dict[str, str] = {}
+        self.source_time: dict[str, str] = {}   # 채널별 실제 수집 시각 (재사용 판단용)
         self.source_status: dict[str, str] = {
             "rain": "unknown",
             "groundwater": "unknown",
@@ -117,6 +118,8 @@ class GridRiskField:
             self._r_scores = r_new
             self._r_event_time = np.full(len(self.grid_df), t_now)
             self.source_detail["rain"] = getattr(rain_adapter, "detail", "")
+            if getattr(rain_adapter, "fetched_at", None):
+                self.source_time["rain"] = rain_adapter.fetched_at
             self.source_status["rain"] = _status_for(rain_adapter, rain_raw)
         except Exception as e:
             self.source_status["rain"] = f"error: {type(e).__name__}"
@@ -135,6 +138,8 @@ class GridRiskField:
             self._g_sigma_raw = sigma_raw
             self._g_event_time = np.full(len(self.grid_df), t_now)
             self.source_detail["groundwater"] = getattr(gw_adapter, "detail", "")
+            if getattr(gw_adapter, "fetched_at", None):
+                self.source_time["groundwater"] = gw_adapter.fetched_at
             self.source_status["groundwater"] = _status_for(gw_adapter, sigma_raw)
         except Exception as e:
             self.source_status["groundwater"] = f"error: {type(e).__name__}"
@@ -146,6 +151,8 @@ class GridRiskField:
             self._t_scores = t_new
             self._t_event_time = np.full(len(self.grid_df), t_now)
             self.source_detail["traffic"] = getattr(traffic_adapter, "detail", "")
+            if getattr(traffic_adapter, "fetched_at", None):
+                self.source_time["traffic"] = traffic_adapter.fetched_at
             self.source_status["traffic"] = _status_for(traffic_adapter, traffic_raw)
         except Exception as e:
             self.source_status["traffic"] = f"error: {type(e).__name__}"
@@ -225,6 +232,7 @@ class GridRiskField:
             "mode": mode,
             "source_status": dict(self.source_status),
             "source_detail": dict(self.source_detail),
+            "source_time": dict(self.source_time),
             "cells": cells,
         }
 
