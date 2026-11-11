@@ -118,6 +118,8 @@ class GimsGroundwaterSource(GroundwaterSourceAdapter):
         self.fetched_at: str | None = None
         self.cache: dict | None = None
         self._consec: np.ndarray | bool = False
+        self._errors: list[str] = []
+        self._fallback_age = timedelta(hours=float(cfg.get("fallback_hours", 6)))
 
     # ── 관측정 1곳 ───────────────────────────────────────────────────────
     def _station(self, row) -> dict | None:
@@ -128,8 +130,15 @@ class GimsGroundwaterSource(GroundwaterSourceAdapter):
         try:
             r = requests.get(URL, params=params, timeout=self.timeout)
             r.raise_for_status()
-            vals, last, key = _series(_records(r.json()))
-        except Exception:
+            payload = r.json()
+            recs = _records(payload)
+            if not recs:  # 오류 응답: resultCode를 기록해 원인을 로그로 남긴다
+                code = ((payload or {}).get("response") or {}).get("resultCode", "빈 응답")
+                self._errors.append(str(code))
+                return None
+            vals, last, key = _series(recs)
+        except Exception as e:
+            self._errors.append(type(e).__name__)
             return None
         if len(vals) < 10:
             return None
@@ -148,7 +157,7 @@ class GimsGroundwaterSource(GroundwaterSourceAdapter):
                 "n": int(len(vals)), "last": last, "key": key}
 
     # ── 재사용 ───────────────────────────────────────────────────────────
-    def _reuse(self) -> list[dict] | None:
+    def _reuse(self, max_age: timedelta | None = None) -> list[dict] | None:
         try:
             with open(self._prev, encoding="utf-8") as f:
                 snap = json.load(f)
@@ -156,7 +165,7 @@ class GimsGroundwaterSource(GroundwaterSourceAdapter):
             fetched = datetime.fromisoformat(cache["fetched_at"])
         except Exception:
             return None
-        if self._now_fn() - fetched > self._refresh or not cache.get("stations"):
+        if self._now_fn() - fetched > (max_age or self._refresh) or not cache.get("stations"):
             return None
         self.fetched_at = cache["fetched_at"]
         return cache["stations"]
@@ -173,7 +182,15 @@ class GimsGroundwaterSource(GroundwaterSourceAdapter):
                 self.fetched_at = self._now_fn().isoformat(timespec="seconds")
             if stations:
                 return self._project(grid_df, stations, reused)
-            reason = f"응답 관측정 0곳 (요청 {len(self._stations)}곳)"
+            from collections import Counter
+            errs = ", ".join(f"{k}×{v}" for k, v in Counter(self._errors).most_common(3)) or "-"
+            reason = f"응답 관측정 0곳 (요청 {len(self._stations)}곳, 오류: {errs})"
+            # 일시적 실패(호출 한도 등)면 직전 정상값을 최대 fallback_hours까지 계속 사용
+            stations = self._reuse(self._fallback_age)
+            if stations:
+                out = self._project(grid_df, stations, True)
+                self.detail += f" — 이번 호출 실패({errs})로 직전 값 사용"
+                return out
 
         self.origin, self.fetched_at, self.cache = "fixture", None, None
         self.detail = f"실시간 실패 → 샘플 사용 / {reason}"

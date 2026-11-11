@@ -114,14 +114,7 @@ def main() -> int:
             probe(f"서울시 실시간 도로 소통 정보 (TrafficInfo, xml, 링크 {link_id})",
                   f"{base}/xml/TrafficInfo/1/5/{link_id}")
 
-    gw = KEYS["GW_API_KEY"]
-    if gw:
-        today = datetime.now(tz=KST)
-        probe("국가지하수측정망 시간자료 (서울마곡 충적 84002, 최근 2일)",
-              "http://www.gims.go.kr/api/data/observationStationTimeService/observationStationTimeService",
-              {"KEY": gw, "type": "JSON", "gennum": 84002, "datatype": 1,
-               "begindate": (today - timedelta(days=2)).strftime("%Y%m%d"), "enddate": today.strftime("%Y%m%d")},
-              n=1500)
+    # 지하수(GIMS)는 호출 한도가 있어 진단에서 호출하지 않는다. 상태는 Generate new snapshot 로그에서 확인.
 
     print("\n진단 완료")
     return 0

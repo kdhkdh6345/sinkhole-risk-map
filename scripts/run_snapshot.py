@@ -152,6 +152,15 @@ def main() -> int:
     else:
         print(f"  스냅샷 계산: {snap_elapsed_ms:.1f}ms ✅")
 
+    # ── 7-1. 하수관로 실시간 수위 (지도 표시용, 점수에는 미반영) ─────────────
+    if args.mode == "real":
+        from sinkhole.sources.sewer_live import SeoulSewerLevelSource
+        sewer_src = SeoulSewerLevelSource()
+        sewer = sewer_src.fetch()
+        print(f"  {'✅' if sewer else '⚠️ '} sewer: {sewer_src.detail}")
+        if sewer:
+            snap["sewer"] = sewer
+
     # 단계 분포 출력
     cells = snap["cells"]
     from collections import Counter
