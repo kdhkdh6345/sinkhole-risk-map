@@ -72,7 +72,8 @@ def test_sigma_projection_live(tmp_path):
     gw.requests = _fake_requests()
     try:
         src = GimsGroundwaterSource(api_key="T", now_fn=lambda: NOW,
-                                    prev_snapshot=tmp_path / "none.json", stations_csv=_stations_csv(tmp_path))
+                                    prev_snapshot=tmp_path / "none.json", stations_csv=_stations_csv(tmp_path),
+                                    series_file=tmp_path / "series.json")
         out = src.fetch(GRID)
     finally:
         gw.requests = orig
@@ -89,7 +90,8 @@ def test_depth_key_sign_flipped(tmp_path):
     gw.requests = _fake_requests(key="lev")
     try:
         src = GimsGroundwaterSource(api_key="T", now_fn=lambda: NOW,
-                                    prev_snapshot=tmp_path / "none.json", stations_csv=_stations_csv(tmp_path))
+                                    prev_snapshot=tmp_path / "none.json", stations_csv=_stations_csv(tmp_path),
+                                    series_file=tmp_path / "series.json")
         out = src.fetch(GRID)
     finally:
         gw.requests = orig
@@ -108,7 +110,8 @@ def test_reuse_cache(tmp_path):
     gw.requests = _fake_requests(calls=calls)
     try:
         src = GimsGroundwaterSource(api_key="T", now_fn=lambda: NOW,
-                                    prev_snapshot=tmp_path / "prev.json", stations_csv=_stations_csv(tmp_path))
+                                    prev_snapshot=tmp_path / "prev.json", stations_csv=_stations_csv(tmp_path),
+                                    series_file=tmp_path / "series.json")
         out = src.fetch(GRID)
     finally:
         gw.requests = orig
@@ -120,7 +123,53 @@ def test_reuse_cache(tmp_path):
 
 def test_no_key_fixture(tmp_path):
     src = GimsGroundwaterSource(api_key="", now_fn=lambda: NOW,
-                                prev_snapshot=tmp_path / "none.json", stations_csv=_stations_csv(tmp_path))
+                                prev_snapshot=tmp_path / "none.json", stations_csv=_stations_csv(tmp_path),
+                                    series_file=tmp_path / "series.json")
     out = src.fetch(GRID)
     assert src.origin == "fixture"
     assert out.shape == (2,)
+
+
+def _hourly_ymd(start, end, drop_last=0.0):
+    """실제 응답 형식: ymd = YYYYMMDDHH, 항목 elev."""
+    recs, t = [], start
+    while t <= end:
+        v = 10.0 + 0.05 * np.sin(t.timestamp() / 3600)
+        if t > NOW - timedelta(hours=2):
+            v -= drop_last
+        recs.append({"gennum": "84002", "elev": f"{v:.3f}", "ymd": t.strftime("%Y%m%d%H")})
+        t += timedelta(hours=1)
+    return {"response": {"resultData": recs, "resultCode": "Success"}}
+
+
+def test_today_only_realtime_accumulates(tmp_path):
+    """실시간(datatype=1)은 당일분만, 과거(datatype=2)는 실패 → 처음엔 자료부족, 이력이 쌓이면 계산."""
+    today0 = NOW.replace(hour=0)
+
+    class R:
+        @staticmethod
+        def get(url, params=None, timeout=None):
+            if params["datatype"] == 2:
+                return FakeResp({"response": {"resultCode": "INVALID_VALUE"}})
+            return FakeResp(_hourly_ymd(today0, NOW, drop_last=1.0))
+
+    orig = gw.requests
+    gw.requests = R
+    try:
+        series = tmp_path / "series.json"
+        kw = dict(api_key="T", now_fn=lambda: NOW, prev_snapshot=tmp_path / "none.json",
+                  stations_csv=_stations_csv(tmp_path), series_file=series)
+        src = GimsGroundwaterSource(**kw)
+        src.fetch(GRID)
+        assert src.origin == "fixture" and "자료부족(15개)" in src.detail
+        # 직전 누적 이력(2일치)을 넣어두면 계산 가능
+        hist = _hourly_ymd(NOW - timedelta(days=3), today0 - timedelta(hours=1))["response"]["resultData"]
+        series.write_text(json.dumps({"84002": {r["ymd"]: float(r["elev"]) for r in hist}}), encoding="utf-8")
+        src2 = GimsGroundwaterSource(**kw)
+        out = src2.fetch(GRID)
+    finally:
+        gw.requests = orig
+    assert src2.origin == "live"
+    assert out[0] < -2.0
+    saved = json.loads(series.read_text(encoding="utf-8"))
+    assert len(saved["84002"]) == len(hist) + 15   # 기존 이력 + 당일 15시간 누적 저장

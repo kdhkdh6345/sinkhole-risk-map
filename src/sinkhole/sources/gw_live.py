@@ -41,6 +41,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 WEIGHTS_YAML = PROJECT_ROOT / "config" / "weights.yaml"
 STATIONS_CSV = PROJECT_ROOT / "data" / "raw" / "gw_stations_seoul.csv"
 PREV_SNAPSHOT = PROJECT_ROOT / "web" / "data" / "snapshot_calm.json"
+# 관측정별 시간 수위 누적 파일. 실시간 자료(datatype=1)는 당일분만 오므로 30일 이력을 직접 쌓는다.
+# 파일명이 snapshot*.json 이라 기존 워크플로의 자동 커밋 대상에 포함된다.
+SERIES_FILE = PROJECT_ROOT / "web" / "data" / "snapshot_gw_series.json"
+MIN_POINTS = 24  # σ 계산에 필요한 최소 시간 자료 수 (하루치)
 URL = "http://www.gims.go.kr/api/data/observationStationTimeService/observationStationTimeService"
 
 LEVEL_KEYS = ("elev", "wlevel", "gwl", "level")  # 수위 표고(클수록 수위 높음)
@@ -65,30 +69,25 @@ def _records(obj) -> list[dict]:
     return []
 
 
-def _series(recs: list[dict]) -> tuple[np.ndarray, str, str]:
-    """레코드 → (시간순 수위 배열(클수록 높음), 마지막 시각 문자열, 사용한 항목명)."""
+def _points(recs: list[dict]) -> tuple[dict[str, float], str]:
+    """레코드 → ({시각문자열: 수위}, 사용 항목명). 시각은 ymd(YYYYMMDDHH) 기준."""
     keys = {k.lower(): k for k in recs[0]}
     lk = next((keys[k] for k in LEVEL_KEYS if k in keys), None)
     sign = 1.0
     if lk is None:
         lk = next((keys[k] for k in DEPTH_KEYS if k in keys), None)
-        sign = -1.0  # 깊이는 부호를 뒤집어 '수위'로 만든다
+        sign = -1.0
     if lk is None:
         raise ValueError(f"수위 항목을 찾지 못함 (항목: {list(recs[0])})")
     tk = next((keys[k] for k in TIME_KEYS if k in keys), None)
-
-    def stamp(r):
-        return f"{r.get(keys.get('ymd', 'ymd'), '')}{str(r.get(tk, '')).zfill(2) if tk else ''}"
-
-    rows = []
+    out = {}
     for r in recs:
+        stamp = f"{r.get(keys.get('ymd', 'ymd'), '')}{str(r.get(tk, '')).zfill(2) if tk else ''}"
         try:
-            rows.append((stamp(r), sign * float(r[lk])))
+            out[stamp] = sign * float(r[lk])
         except (TypeError, ValueError, KeyError):
             continue
-    rows.sort(key=lambda x: x[0])
-    vals = np.array([v for _, v in rows], dtype=np.float64)
-    return vals, (rows[-1][0] if rows else ""), (lk if sign > 0 else f"-{lk}")
+    return out, (lk if sign > 0 else f"-{lk}")
 
 
 class GimsGroundwaterSource(GroundwaterSourceAdapter):
@@ -102,6 +101,7 @@ class GimsGroundwaterSource(GroundwaterSourceAdapter):
         now_fn: Callable[[], datetime] | None = None,
         prev_snapshot: Path | None = None,
         stations_csv: Path | None = None,
+        series_file: Path | None = None,
         timeout: float = 20.0,
     ) -> None:
         self._key = api_key if api_key is not None else os.getenv("GW_API_KEY")
@@ -120,31 +120,56 @@ class GimsGroundwaterSource(GroundwaterSourceAdapter):
         self._consec: np.ndarray | bool = False
         self._errors: list[str] = []
         self._fallback_age = timedelta(hours=float(cfg.get("fallback_hours", 6)))
+        self._series_file = series_file or SERIES_FILE
+        try:
+            self._store: dict[str, dict[str, float]] = json.loads(self._series_file.read_text(encoding="utf-8"))
+        except Exception:
+            self._store = {}
+        self._notes: list[str] = []
 
     # ── 관측정 1곳 ───────────────────────────────────────────────────────
+    def _request(self, gennum: int, datatype: int, begin: datetime, end: datetime) -> tuple[dict, str] | None:
+        params = {"KEY": self._key, "type": "JSON", "gennum": gennum, "datatype": datatype,
+                  "begindate": begin.strftime("%Y%m%d"), "enddate": end.strftime("%Y%m%d")}
+        r = requests.get(URL, params=params, timeout=self.timeout)
+        r.raise_for_status()
+        payload = r.json()
+        recs = _records(payload)
+        if not recs:
+            code = ((payload or {}).get("response") or {}).get("resultCode", "빈 응답")
+            raise RuntimeError(str(code))
+        return _points(recs)
+
     def _station(self, row) -> dict | None:
         now = self._now_fn()
-        params = {"KEY": self._key, "type": "JSON", "gennum": int(row.gennum), "datatype": 1,
-                  "begindate": (now - timedelta(days=self._days)).strftime("%Y%m%d"),
-                  "enddate": now.strftime("%Y%m%d")}
-        try:
-            r = requests.get(URL, params=params, timeout=self.timeout)
-            r.raise_for_status()
-            payload = r.json()
-            recs = _records(payload)
-            if not recs:  # 오류 응답: resultCode를 기록해 원인을 로그로 남긴다
-                code = ((payload or {}).get("response") or {}).get("resultCode", "빈 응답")
-                self._errors.append(str(code))
-                return None
-            vals, last, key = _series(recs)
+        g = str(int(row.gennum))
+        series = dict(self._store.get(g, {}))
+        key = "elev"
+        try:  # 실시간 자료: 최근 2일 (실제로는 당일분만 오는 것으로 확인됨)
+            pts, key = self._request(int(row.gennum), 1, now - timedelta(days=2), now)
+            series.update(pts)
         except Exception as e:
-            self._errors.append(type(e).__name__)
+            self._errors.append(str(e)[:40] if isinstance(e, RuntimeError) else type(e).__name__)
+        if len(series) < 24 * 7:  # 누적 이력이 1주 미만이면 과거 자료(datatype=2)도 시도
+            try:
+                pts, key = self._request(int(row.gennum), 2, now - timedelta(days=self._days), now)
+                series.update(pts)
+            except Exception as e:
+                self._notes.append(f"과거자료:{str(e)[:30]}")
+        cutoff = (now - timedelta(days=self._days)).strftime("%Y%m%d%H")
+        series = {k: v for k, v in series.items() if k >= cutoff}
+        if series:
+            self._store[g] = series
+        if len(series) < MIN_POINTS:
+            self._errors.append(f"자료부족({len(series)}개)")
             return None
-        if len(vals) < 10:
-            return None
-        try:  # 마지막 관측이 너무 오래됐으면 제외 (시각 형식을 모르면 검사 생략)
-            last_dt = datetime.strptime(last[:10] if len(last) >= 10 else last[:8], "%Y%m%d%H" if len(last) >= 10 else "%Y%m%d").replace(tzinfo=KST)
-            if now - last_dt > self._stale + timedelta(days=0 if len(last) >= 10 else 1):
+        stamps = sorted(series)
+        vals = np.array([series[k] for k in stamps], dtype=np.float64)
+        last = stamps[-1]
+        try:  # 마지막 관측이 너무 오래됐으면 제외
+            last_dt = datetime.strptime(last[:10], "%Y%m%d%H").replace(tzinfo=KST)
+            if now - last_dt > self._stale:
+                self._errors.append("오래된 자료")
                 return None
         except ValueError:
             pass
@@ -180,11 +205,14 @@ class GimsGroundwaterSource(GroundwaterSourceAdapter):
                 with ThreadPoolExecutor(max_workers=6) as ex:
                     stations = [s for s in ex.map(self._station, self._stations.itertuples()) if s]
                 self.fetched_at = self._now_fn().isoformat(timespec="seconds")
+                self._save_store()
             if stations:
                 return self._project(grid_df, stations, reused)
             from collections import Counter
             errs = ", ".join(f"{k}×{v}" for k, v in Counter(self._errors).most_common(3)) or "-"
-            reason = f"응답 관측정 0곳 (요청 {len(self._stations)}곳, 오류: {errs})"
+            notes = ", ".join(f"{k}×{v}" for k, v in Counter(self._notes).most_common(2))
+            reason = (f"응답 관측정 0곳 (요청 {len(self._stations)}곳, 사유: {errs})"
+                      f"{' / ' + notes if notes else ''} / {self.history_span}")
             # 일시적 실패(호출 한도 등)면 직전 정상값을 최대 fallback_hours까지 계속 사용
             stations = self._reuse(self._fallback_age)
             if stations:
@@ -199,6 +227,17 @@ class GimsGroundwaterSource(GroundwaterSourceAdapter):
         self._consec = fallback.is_consecutive_valid
         return out
 
+    def _save_store(self) -> None:
+        try:
+            self._series_file.write_text(json.dumps(self._store, separators=(",", ":")), encoding="utf-8")
+        except Exception:
+            pass
+
+    @property
+    def history_span(self) -> str:
+        n = [len(v) for v in self._store.values()]
+        return f"누적 이력 관측정 {len(n)}곳, 최대 {max(n) if n else 0}시간치"
+
     def _project(self, grid_df: pd.DataFrame, stations: list[dict], reused: bool) -> np.ndarray:
         st_ll = np.array([[s["lat"], s["lon"]] for s in stations])
         grid_ll = np.column_stack([grid_df["lat"].to_numpy(), grid_df["lon"].to_numpy()])
@@ -212,7 +251,7 @@ class GimsGroundwaterSource(GroundwaterSourceAdapter):
         drop = sum(1 for s in stations if s["sigma"] <= -1)
         t = datetime.fromisoformat(self.fetched_at)
         self.detail = (f"국가지하수측정망 시간자료 {t:%H:%M} 수집{' 재사용' if reused else ''}, 관측정 {len(stations)}곳"
-                       f" (항목 {stations[0]['key']}), -1σ 이하 하강 {drop}곳")
+                       f" (항목 {stations[0]['key']}), -1σ 이하 하강 {drop}곳 / {self.history_span}")
         return sig
 
     @property
