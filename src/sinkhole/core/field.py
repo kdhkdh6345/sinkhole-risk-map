@@ -87,7 +87,8 @@ class GridRiskField:
         self._g_event_time = np.full(N, t0, dtype=np.float64)
         self._t_event_time = np.full(N, t0, dtype=np.float64)
 
-        # 소스 상태 추적
+        # 소스 상태 추적 (detail: 어떤 경로로 받았는지 사람이 읽는 설명)
+        self.source_detail: dict[str, str] = {}
         self.source_status: dict[str, str] = {
             "rain": "unknown",
             "groundwater": "unknown",
@@ -115,6 +116,7 @@ class GridRiskField:
             r_new = compute_r(rain_raw, self._weights_cfg)    # (N,)
             self._r_scores = r_new
             self._r_event_time = np.full(len(self.grid_df), t_now)
+            self.source_detail["rain"] = getattr(rain_adapter, "detail", "")
             self.source_status["rain"] = _status_for(rain_adapter, rain_raw)
         except Exception as e:
             self.source_status["rain"] = f"error: {type(e).__name__}"
@@ -132,6 +134,7 @@ class GridRiskField:
             self._g_scores = g_new
             self._g_sigma_raw = sigma_raw
             self._g_event_time = np.full(len(self.grid_df), t_now)
+            self.source_detail["groundwater"] = getattr(gw_adapter, "detail", "")
             self.source_status["groundwater"] = _status_for(gw_adapter, sigma_raw)
         except Exception as e:
             self.source_status["groundwater"] = f"error: {type(e).__name__}"
@@ -142,6 +145,7 @@ class GridRiskField:
             t_new = compute_t(traffic_raw, self._weights_cfg)   # (N,)
             self._t_scores = t_new
             self._t_event_time = np.full(len(self.grid_df), t_now)
+            self.source_detail["traffic"] = getattr(traffic_adapter, "detail", "")
             self.source_status["traffic"] = _status_for(traffic_adapter, traffic_raw)
         except Exception as e:
             self.source_status["traffic"] = f"error: {type(e).__name__}"
@@ -220,6 +224,7 @@ class GridRiskField:
             "generated_at": generated_at,
             "mode": mode,
             "source_status": dict(self.source_status),
+            "source_detail": dict(self.source_detail),
             "cells": cells,
         }
 

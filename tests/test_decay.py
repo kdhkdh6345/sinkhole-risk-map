@@ -122,6 +122,9 @@ def test_accelerated_clock_decay_curve():
     clock = AcceleratedClock(speed=1.0)
     field = _make_field(clock)
 
+    # 시뮬 어댑터가 전역 난수를 쓰므로 시드를 고정한다 (시드 없으면 가끔 R=0으로 실패하던 불안정 테스트)
+    np.random.seed(0)
+
     # heavy_rain 시나리오로 업데이트 (종로구 → R=15 이상)
     rain_adapter = SimulatedRainAdapter("heavy_rain")
     gw_adapter = SimulatedGroundwaterAdapter("heavy_rain")

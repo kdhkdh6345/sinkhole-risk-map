@@ -123,11 +123,11 @@ def main() -> int:
     else:
         # 주의: 현재 세 어댑터는 실제 API를 호출하지 않고 data/fixtures 고정 샘플을 읽는다.
         #       (source_status에 "fixture" 또는 "no_data"로 표시됨. 실제 API 연동은 Phase 6 과제)
-        from sinkhole.sources.kma import KmaRainfallSource
+        from sinkhole.sources.kma_live import KmaLiveRainSource
         from sinkhole.sources.groundwater import SeoulGroundwaterSource
         from sinkhole.sources.traffic import SeoulTrafficSource
         
-        rain_adapter = KmaRainfallSource()
+        rain_adapter = KmaLiveRainSource()  # 기상청 AWS → ASOS → 샘플 순서로 시도
         gw_adapter = SeoulGroundwaterSource()
         traffic_adapter = SeoulTrafficSource()
 
@@ -139,7 +139,8 @@ def main() -> int:
     # ── 6. 소스 상태 확인 ─────────────────────────────────────────────────
     for ch, status in field.source_status.items():
         icon = "✅" if status in ("ok", "sim") else "⚠️ "
-        print(f"  {icon} {ch}: {status}")
+        detail = field.source_detail.get(ch, "")
+        print(f"  {icon} {ch}: {status}" + (f"  — {detail}" if detail else ""))
 
     # ── 7. 스냅샷 계산 (수용 기준 7: 1초 미만) ───────────────────────────
     t_snap_start = time.perf_counter()

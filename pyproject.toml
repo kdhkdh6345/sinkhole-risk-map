@@ -15,6 +15,7 @@ dependencies = [
     "requests>=2.31",
     "pyarrow>=14.0",
     "shapely>=2.0",
+    "scipy>=1.11",
 ]
 
 [project.optional-dependencies]

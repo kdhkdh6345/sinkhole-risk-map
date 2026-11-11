@@ -98,7 +98,7 @@ async function init() {
     applySnapshot(snapData);
     updateDeckGLLayer();
     updateHeader(SNAP_META, SNAP_CELLS);
-    updateSourceStatus(SNAP_META.source_status);
+    updateSourceStatus(SNAP_META.source_status, SNAP_META.source_detail);
     if (parityData) runParityCheck(parityData.cases);
 
     // 이벤트 바인딩
@@ -534,7 +534,7 @@ async function onScenarioChange(e) {
     applySnapshot(snapData);
     updateDeckGLLayer();
     updateHeader(SNAP_META, SNAP_CELLS);
-    updateSourceStatus(SNAP_META.source_status);
+    updateSourceStatus(SNAP_META.source_status, SNAP_META.source_detail);
     hideLoading();
   } catch (err) {
     console.warn(`[시나리오 전환] 실패`, err);
@@ -548,7 +548,8 @@ function applySnapshot(snapData) {
   SNAP_META = {
     generated_at: snapData.generated_at,
     mode: snapData.mode,
-    source_status: snapData.source_status
+    source_status: snapData.source_status,
+    source_detail: snapData.source_detail || {}
   };
   lastGeneratedAt = snapData.generated_at;
 
@@ -590,7 +591,7 @@ function startAutoRefresh() {
       applySnapshot(fallbackData);
       updateDeckGLLayer();
       updateHeader(SNAP_META, SNAP_CELLS);
-      updateSourceStatus(SNAP_META.source_status);
+      updateSourceStatus(SNAP_META.source_status, SNAP_META.source_detail);
       updateRefreshIndicator('갱신됨');
     } catch (err) {
       updateRefreshIndicator('실패');
@@ -692,7 +693,7 @@ function updateCounters(cellsById) {
   document.getElementById('chip-s3').style.boxShadow = s3 > 0 ? '0 0 8px rgba(218,54,51,.6)' : '';
 }
 
-const LIVE_MODE_TEXT = '현재 기본 모드는 <b>고정 샘플 데이터(data/fixtures)</b>로 계산한 값을 표시합니다. 기상청·GIMS·TOPIS 실시간 API 연동은 다음 단계 과제이며, 아래 데이터 소스 표시로 각 채널의 실제 상태를 확인할 수 있습니다.';
+const LIVE_MODE_TEXT = '실시간 모드입니다. <b>강수는 기상청 API허브 실시간 관측값</b>(연동 실패 시 샘플 데이터)을, 지하수위·교통은 현재 샘플 데이터를 사용합니다. 채널별 실제 상태는 아래 데이터 소스 표시에서 확인할 수 있습니다 (마우스를 올리면 상세 출처 표시).';
 
 const SOURCE_STATUS_LABEL = {
   ok: '실시간',
@@ -702,11 +703,13 @@ const SOURCE_STATUS_LABEL = {
   unknown: '확인 중',
 };
 
-function updateSourceStatus(status) {
+function updateSourceStatus(status, detail) {
   for (const [key, short] of [['rain','rain'],['groundwater','gw'],['traffic','tr']]) {
     const st = (status || {})[key] || 'unknown';
     document.getElementById('dot-' + short).className = 'src-dot ' + (st === 'ok' ? 'ok' : st.startsWith('error') ? 'err' : 'unknown');
-    document.getElementById('st-' + short).textContent = SOURCE_STATUS_LABEL[st] || st;
+    const el = document.getElementById('st-' + short);
+    el.textContent = SOURCE_STATUS_LABEL[st] || st;
+    el.title = ((detail || {})[key]) || '';   // 상세 출처 (예: AWS 매분자료, 관측소 N곳)
   }
 }
 
