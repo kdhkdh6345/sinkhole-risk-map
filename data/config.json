@@ -105,7 +105,14 @@
         "consecutive_obs": 2
       },
       "traffic": {
-        "max": 5
+        "max": 5,
+        "congestion": {
+          "원활": 0.0,
+          "서행": 0.5,
+          "정체": 1.0
+        },
+        "refresh_minutes": 30,
+        "link_radius_deg": 0.005
       }
     },
     "stages": {
