@@ -59,6 +59,8 @@ class KmaRainfallSource(RainSourceAdapter):
         max_dist_deg: 최근접 이웃 허용 최대 거리 (도 단위, 기본 0.1°≈11km)
     """
 
+    origin = "fixture"  # 데이터 출처: 고정 샘플 파일(data/fixtures). 실제 API 연동 전
+
     def __init__(
         self,
         nc_path: str | Path | None = None,

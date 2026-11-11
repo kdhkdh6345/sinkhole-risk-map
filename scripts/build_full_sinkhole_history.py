@@ -2,7 +2,7 @@ import json
 import random
 from pathlib import Path
 
-# 1. 뉴스 보도 대형 사고 (14건 - 100% 팩트)
+# 1. 뉴스 보도 대형 사고 14건 (날짜·위치는 보도 기준, 개별 검증 필요)
 REAL_SINKHOLES = [
     {"date": "2024-08-29", "location": "서대문구 연희동 성산로", "grade": 3, "lat": 37.568, "lon": 126.931, "dong": "서울특별시 서대문구 연희동"},
     {"date": "2024-08-31", "location": "종로구 종로5가역 인근", "grade": 2, "lat": 37.570, "lon": 127.001, "dong": "서울특별시 종로구 종로5·6가동"},
@@ -60,7 +60,7 @@ for ev in REAL_SINKHOLES:
         }
         dong_counts[ev['dong']] = dong_counts.get(ev['dong'], 0) + 1
 
-# 소규모 사고 통계 기반 맵핑 (통계 역산)
+# 소규모 사고: 구별 건수만 통계 비율을 따르고, 위치·날짜는 무작위 가상 배치
 for gu, count in GU_STATS.items():
     if gu not in cells_by_gu: continue
     gu_cells = cells_by_gu[gu]
@@ -80,7 +80,7 @@ for gu, count in GU_STATS.items():
         history_map[cid] = {
             "date": f"{year}-{month:02d}-{day:02d}",
             "time": f"{random.randint(0,23):02d}:{random.randint(0,59):02d}",
-            "location": f"{gu} 소규모 지반침하 (JIS 통계)",
+            "location": f"{gu} 소규모 지반침하 (구별 통계 기반 가상 배치)",
             "grade": random.choices([1, 2], weights=[0.8, 0.2])[0]
         }
         

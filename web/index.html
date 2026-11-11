@@ -342,7 +342,7 @@
     <div class="sim-row">
       <label>시나리오</label>
       <select id="sel-scenario">
-        <option value="calm" selected>실시간 관측 모드 (Live Mode)</option>
+        <option value="calm" selected>기본 모드 (샘플 데이터)</option>
         <option value="heavy_rain">호우경보 (heavy_rain)</option>
         <option value="extreme">극한호우 (extreme)</option>
         <option value="historical_flood_2022">2022년 폭우 (과거)</option>
@@ -360,7 +360,7 @@
     
     <div id="sim-explanation" style="margin-top: 10px; font-size: 0.8rem; color: #a0a0a0; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); display: block;">
       <div style="font-weight: bold; color: #fff; margin-bottom: 4px;">[시뮬레이션 진행 상황]</div>
-      <div id="sim-exp-text">평상시 상태로, 기상청(강수량), GIMS(지하수위), TOPIS(교통량) 등 <b>실시간 관측 데이터를 기반으로 측정되어 업데이트 되는 현재의 값</b>을 표현합니다. (랜덤 시뮬레이션 아님)</div>
+      <div id="sim-exp-text">현재 기본 모드는 <b>고정 샘플 데이터(data/fixtures)</b>로 계산한 값을 표시합니다. 기상청·GIMS·TOPIS 실시간 API 연동은 다음 단계 과제이며, 아래 데이터 소스 표시로 각 채널의 실제 상태를 확인할 수 있습니다.</div>
     </div>
   </div>
 
@@ -383,12 +383,12 @@
     <div style="margin-top: 8px; font-size: 0.8rem; display: flex; flex-direction: column; gap: 6px;">
       <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-nationwide" onchange="toggleLayers()"> 전국 시·도 개요 보기</label>
       <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-grid" onchange="toggleLayers()" checked> 3D 격자(큐브) 종합 위험도 보기</label>
-      <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-dong" onchange="toggleLayers()" checked> 서울시 동별 위험도 히트맵</label>
-      <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-pipes" onchange="toggleLayers()" checked> 지하철 노선도 / 상하수도 노후 관로</label>
-      <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-complaints" onchange="toggleLayers()" checked> 최근 민원 발생 위치 핀(Pin)</label>
-      <label style="cursor: pointer; color: #ff5555; font-weight: bold;"><input type="checkbox" id="chk-layer-ai-anomaly" onchange="toggleLayers()" checked> AI 예측 이상탐지 (Prediction Residual)</label>
+      <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-dong" onchange="toggleLayers()" checked> 서울시 동별 과거 이력 밀도 <span style="opacity:.7">(가상 배치 포함)</span></label>
+      <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-pipes" onchange="toggleLayers()" checked> 지하철 노선도 / 상하수도 노후 관로 <span style="opacity:.7">(가상·시연용)</span></label>
+      <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-complaints" onchange="toggleLayers()" checked> 최근 민원 발생 위치 핀(Pin) <span style="opacity:.7">(가상·시연용)</span></label>
+      <label style="cursor: pointer; color: #ff5555; font-weight: bold;"><input type="checkbox" id="chk-layer-ai-anomaly" onchange="toggleLayers()" checked> 지하수위 이상탐지 (|σ| &gt; 2.5)</label>
 
-      <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-points" onchange="toggleLayers()"> 과거 싱크홀 발생 현황</label>
+      <label style="cursor: pointer;"><input type="checkbox" id="chk-layer-points" onchange="toggleLayers()"> 과거 싱크홀 발생 현황 <span style="opacity:.7">(보도 13건 + 통계 기반 가상 배치)</span></label>
     </div>
   </div>
 </aside>
@@ -401,17 +401,17 @@
     <div class="legend-item">
       <div class="legend-swatch" style="background:var(--stage1-fill);border-color:var(--stage1-color)"></div>
       <span>1단계 — 기저 주의</span>
-      <span class="cond">B≥10</span>
+      <span class="cond" id="cond-s1">B≥10</span>
     </div>
     <div class="legend-item">
       <div class="legend-swatch" style="background:var(--stage2-fill);border-color:var(--stage2-color)"></div>
       <span>2단계 — 강수 경보</span>
-      <span class="cond">+R≥15</span>
+      <span class="cond" id="cond-s2">+R≥15</span>
     </div>
     <div class="legend-item">
       <div class="legend-swatch" style="background:var(--stage3-fill);border-color:var(--stage3-color)"></div>
       <span>3단계 — 극한 위험</span>
-      <span class="cond">+G≥10</span>
+      <span class="cond" id="cond-s3">+G≥8</span>
     </div>
   </div>
 

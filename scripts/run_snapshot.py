@@ -55,6 +55,12 @@ def parse_args() -> argparse.Namespace:
         help="[--mode sim 전용] 시나리오",
     )
     parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="[--mode sim 전용] 난수 시드 (같은 시드 → 같은 결과, 재현성 확보)",
+    )
+    parser.add_argument(
         "--no-state",
         action="store_true",
         help="기존 state.npz를 무시하고 새로 시작",
@@ -102,6 +108,9 @@ def main() -> int:
 
     # ── 5. 어댑터 생성 및 업데이트 ────────────────────────────────────────
     if args.mode == "sim":
+        # 재현성: 시뮬레이션 어댑터는 np.random 전역 난수를 사용하므로 시드를 고정한다.
+        np.random.seed(args.seed)
+        print(f"  난수 시드: {args.seed}")
         from sinkhole.sources.simulated import (
             SimulatedGroundwaterAdapter,
             SimulatedRainAdapter,
@@ -112,7 +121,8 @@ def main() -> int:
         gw_adapter = SimulatedGroundwaterAdapter(scenario=args.scenario)
         traffic_adapter = SimulatedTrafficAdapter()
     else:
-        # Phase 6-1, 6-2, 6-3: 기상청 강수량 & 지하수위 & 교통량 연동 완비
+        # 주의: 현재 세 어댑터는 실제 API를 호출하지 않고 data/fixtures 고정 샘플을 읽는다.
+        #       (source_status에 "fixture" 또는 "no_data"로 표시됨. 실제 API 연동은 Phase 6 과제)
         from sinkhole.sources.kma import KmaRainfallSource
         from sinkhole.sources.groundwater import SeoulGroundwaterSource
         from sinkhole.sources.traffic import SeoulTrafficSource
@@ -128,7 +138,7 @@ def main() -> int:
 
     # ── 6. 소스 상태 확인 ─────────────────────────────────────────────────
     for ch, status in field.source_status.items():
-        icon = "✅" if status == "ok" else "⚠️ "
+        icon = "✅" if status in ("ok", "sim") else "⚠️ "
         print(f"  {icon} {ch}: {status}")
 
     # ── 7. 스냅샷 계산 (수용 기준 7: 1초 미만) ───────────────────────────
@@ -152,7 +162,9 @@ def main() -> int:
     # ── 8. 수용 기준 검증 ─────────────────────────────────────────────────
     stage3_count = stage_counts.get(3, 0)
 
-    if args.scenario == "calm":
+    if args.mode != "sim":
+        pass  # 수용 기준(시나리오별 Stage 3 유무)은 시뮬레이션 모드에만 적용한다.
+    elif args.scenario == "calm":
         if stage3_count == 0:
             print(f"\n  ✅ calm: Stage 3 없음 ({stage3_count}개)")
         else:

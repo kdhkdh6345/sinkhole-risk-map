@@ -43,6 +43,8 @@ class SimulatedRainAdapter(RainSourceAdapter):
     scoring.py.compute_r()를 통해 R 점수로 변환된다.
     """
 
+    origin = "sim"  # 데이터 출처: 시뮬레이션 합성값
+
     def __init__(self, scenario: str) -> None:
         """
         Args:
@@ -102,6 +104,8 @@ class SimulatedGroundwaterAdapter(GroundwaterSourceAdapter):
     fetch()는 관측정 단위 σ 이상도를 격자로 투영한 배열을 반환한다.
     """
 
+    origin = "sim"  # 데이터 출처: 시뮬레이션 합성값
+
     def __init__(self, scenario: str) -> None:
         if scenario not in ("calm", "heavy_rain", "extreme", "historical_flood_2022"):
             raise ValueError(f"알 수 없는 시나리오: {scenario}")
@@ -160,6 +164,8 @@ class SimulatedTrafficAdapter(TrafficSourceAdapter):
     시나리오와 무관하게 동일한 값을 반환한다 (Phase 3 설계).
     TOPIS 실시간 연동은 Phase 7 이후 선택 사항 (AGENTS.md 6절).
     """
+
+    origin = "sim"  # 데이터 출처: 시뮬레이션 합성값
 
     def fetch(self, grid_df: pd.DataFrame) -> np.ndarray:
         """격자별 교통 저하율(0.0~1.0)을 반환한다.

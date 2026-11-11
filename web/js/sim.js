@@ -68,6 +68,7 @@ const SinkholeEngine = (() => {
     return 1;
   }
 
+  // 측정 분산은 weights.yaml의 fusion.variances에서 읽는다 (아래는 설정 누락 시 대비값).
   function bayesianFuse(b, r, g, t, variances) {
     const v = variances || { b: 4.0, r: 9.0, g: 25.0, t: 36.0 };
     const w_b = 1.0 / v.b;
@@ -95,12 +96,22 @@ const SinkholeEngine = (() => {
     const t = cell.t_raw * factor;
     
     // Phase 7-1: 베이지안 융합 적용
-    const { score, unc } = bayesianFuse(cell.b, r, g, t, weightsCfg.variances);
-    
-    // Phase 7-2: AI 잔차 이상탐지 (시간 흐름에 따라 감소하여 사라지도록 시뮬레이션)
-    const ai_anomaly = cell.ai_anomaly ? (factor > 0.45) : false;
+    const { score, unc } = bayesianFuse(cell.b, r, g, t, _variances(weightsCfg));
 
-    return { score, stage: computeStage(cell.b, r, g, weightsCfg), r, g, t, b: cell.b, unc, ai_anomaly };
+    // Phase 7-2: 이상탐지 — 지하수위 σ 이상도도 다른 채널과 같은 감쇠를 받는다.
+    const gs = (cell.gs_raw || 0) * factor;
+    const ai_anomaly = isAnomaly(gs, weightsCfg);
+
+    return { score, stage: computeStage(cell.b, r, g, weightsCfg), r, g, t, b: cell.b, unc, gs, ai_anomaly };
+  }
+
+  function _variances(weightsCfg) {
+    return ((weightsCfg || {}).fusion || {}).variances;
+  }
+
+  function isAnomaly(gs, weightsCfg) {
+    const thr = ((weightsCfg || {}).anomaly || {}).sigma_threshold ?? 2.5;
+    return Math.abs(gs) > thr;
   }
 
   function validateParity(cases, gridCfg, weightsCfg) {
@@ -109,18 +120,24 @@ const SinkholeEngine = (() => {
       const r = c.r_raw * factor;
       const g = c.g_raw * factor;
       const t = c.t_raw * factor;
-      const { score } = bayesianFuse(c.b, r, g, t, weightsCfg.variances);
+      const { score, unc } = bayesianFuse(c.b, r, g, t, _variances(weightsCfg));
       const stage = computeStage(c.b, r, g, weightsCfg);
+      const anomaly = isAnomaly((c.gs_raw || 0) * factor, weightsCfg);
       const scoreDiff = Math.abs(score - c.score);
+      const uncDiff = Math.abs(unc - c.unc);
       return {
         case: c.case, elapsed_h: c.elapsed_h,
         py_score: c.score, js_score: Math.round(score * 1e6) / 1e6,
         score_diff: Math.round(scoreDiff * 1e6) / 1e6,
         py_stage: c.stage, js_stage: stage,
-        ok: scoreDiff < 0.01 && stage === c.stage,
+        py_anomaly: c.ai_anomaly, js_anomaly: anomaly,
+        ok: scoreDiff < 0.01 && uncDiff < 0.01 && stage === c.stage && anomaly === c.ai_anomaly,
       };
     });
   }
 
-  return { decayFactor, applyDecay, computeR, computeG, computeT, computeStage, bayesianFuse, computeAll, validateParity };
+  return { decayFactor, applyDecay, computeR, computeG, computeT, computeStage, bayesianFuse, isAnomaly, computeAll, validateParity };
 })();
+
+// Node.js(tests/run_parity.js)에서도 같은 엔진을 쓰기 위한 내보내기. 브라우저에서는 무시된다.
+if (typeof module !== 'undefined' && module.exports) { module.exports = SinkholeEngine; }

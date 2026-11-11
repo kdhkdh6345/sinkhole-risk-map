@@ -15,16 +15,33 @@
 |------|------|------|
 | 1단계 (초록) | 🟢 | 기저점수 B ≥ 10 |
 | 2단계 (노랑) | 🟡 | 1단계 + 강수 R ≥ 15 |
-| 3단계 (빨강) | 🔴 | 2단계 + 지하수위 G ≥ 10 |
+| 3단계 (빨강) | 🔴 | 2단계 + 지하수위 G ≥ 8 |
 
 ## 점수 체계
 
 - **B (기저점수, 0~60)**: 하수관 노후도 · 시추공 N값 · 과거 침하 이력 · 액상화 위험등급
+  - 현재 구현: **하수관 노후도(0~20, 자치구 단위)만 반영**, 나머지 3개 레이어는 0점 스텁
 - **R (강수, 0~25)**: 1h/3h/12h 누적 강수량 → 기상청 특보 기준 구간 매핑
 - **G (지하수위, 0~10)**: σ 이상도 급락 (강수 조건 + 연속 2회 유지)
 - **T (교통, 0~5)**: 도로 등급·버스노선 밀도 기반 정적 프록시
 
-감쇠 함수: 이벤트 후 0~24h 유지 → 24~72h 지수감쇠 (72h에 5% 잔존) → 72h+ 소멸
+감쇠 함수: 이벤트 직후부터 지수감쇠 → 96h에 1% 잔존 → 96h 초과 소멸 (`config/grid.yaml`)
+
+융합: 채널별 측정 분산(`weights.yaml` fusion.variances)의 역수를 가중치로 한 가중평균 + 1σ 불확실성
+
+이상탐지: 지하수위 σ 이상도의 절댓값이 2.5 초과 (`weights.yaml` anomaly.sigma_threshold)
+
+## 데이터 출처 현황
+
+| 채널/레이어 | 현재 상태 |
+|---|---|
+| 강수 R | 기본 모드: 샘플 파일(netCDF4 미설치 시 데이터 없음) / 시나리오: 합성값 |
+| 지하수위 G | 기본 모드: 샘플 관측정 3개 / 시나리오: 합성값 |
+| 교통 T | 기본 모드: 샘플 파일 / 시나리오: 자치구별 정적 프록시 |
+| 과거 싱크홀 | 보도 기반 13개 격자 + 구별 통계 비율로 위치·날짜를 가상 배치한 77건 |
+| 지하철·관로·민원 레이어 | 시연용 가상 데이터 |
+
+실제 기상청·GIMS·TOPIS API 연동은 Phase 6 과제이며, 화면의 데이터 소스 표시(실시간/샘플 데이터/시뮬레이션/데이터 없음)로 확인할 수 있다.
 
 ---
 
@@ -41,7 +58,7 @@ python scripts/build_grid.py
 python scripts/build_baseline.py
 
 # 4. 스냅샷 생성
-python scripts/run_snapshot.py --mode sim --scenario extreme
+python scripts/run_snapshot.py --mode sim --scenario extreme --seed 42
 
 # 5. 웹서버 실행 (http://localhost:8765)
 cd web && python -m http.server 8765
@@ -51,6 +68,11 @@ cd web && python -m http.server 8765
 
 ```bash
 python -m pytest -v
+
+# Python ↔ JS 엔진 일치 검증 (설정·엔진 변경 시 parity 케이스 재생성)
+python scripts/export_config.py
+python scripts/build_parity.py
+node tests/run_parity.js
 ```
 
 ---
@@ -74,7 +96,7 @@ sinkhole-risk-map/
 ├── web/
 │   ├── index.html         # 메인 지도
 │   ├── js/sim.js          # 브라우저 시뮬 엔진 (Python 동일 로직)
-│   ├── js/render.js       # Leaflet 렌더링
+│   ├── js/render.js       # Deck.GL 렌더링
 │   └── data/              # grid.json, snapshot.json
 ├── scripts/               # build_grid, build_baseline, run_snapshot
 └── tests/                 # pytest (25개 테스트)
@@ -97,11 +119,11 @@ sinkhole-risk-map/
 - [x] Phase 1 — 서울시 500m 격자 생성 (2430개)
 - [x] Phase 2 — 정적 기저점수 B (하수관 노후도)
 - [x] Phase 3 — 시뮬레이션 엔진 (감쇠·점수화·단계판정)
-- [x] Phase 4 — 웹 지도 (Leaflet, 다크 모드, 시뮬 패널)
+- [x] Phase 4 — 웹 지도 (Deck.GL, 다크 모드, 시뮬 패널)
 - [x] Phase 5 — GitHub Pages 배포 + 자동 갱신
 - [ ] Phase 6 — 실제 API 연동 (기상청·GIMS)
 - [ ] Phase 7 — 불확실성 정량화
 
 ---
 
-*서버 없이 동작하는 정적 지도. Leaflet CDN과 지도 타일 외 외부 의존 없음.*
+*서버 없이 동작하는 정적 지도.*

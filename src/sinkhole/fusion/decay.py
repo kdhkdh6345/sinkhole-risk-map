@@ -17,9 +17,14 @@ AGENTS.md 규칙:
     exp(k * (t - plateau))        if plateau < t <= tail
     0.0                           if t > tail
 
-검증:
-  t = 48h: exp(k * 24) = exp(ln(0.05)/2) = sqrt(0.05) ≈ 0.2236 (수용 기준 ~0.22)
-  t = 72h: exp(k * 48) = 0.05                              (수용 기준 ~0.05)
+검증 (현재 grid.yaml 값 기준, k = ln(0.01)/96 ≈ -0.04797):
+  t = 24h: 0.01^(24/96) ≈ 0.3162
+  t = 48h: 0.01^(48/96) = 0.1000
+  t = 72h: 0.01^(72/96) ≈ 0.0316
+  t = 96h: 0.0100,  t > 96h: 0
+
+변경 이력: 초기 설계(AGENTS.md 6절)는 24h 유지 → 72h 5% 잔존이었으나,
+시뮬레이션 슬라이더(0~96h) 시연을 위해 즉시 감쇠·96h 1% 잔존으로 변경했다.
 """
 
 from __future__ import annotations
@@ -54,11 +59,11 @@ def decay_factor(elapsed_hours: np.ndarray, cfg: dict) -> np.ndarray:
     elapsed = np.asarray(elapsed_hours, dtype=np.float64)
     factor = np.ones_like(elapsed)
 
-    # 24h < t <= 72h: 지수감쇠
+    # plateau < t <= tail: 지수감쇠
     mask_decay = (elapsed > plateau) & (elapsed <= tail)
     factor[mask_decay] = np.exp(k * (elapsed[mask_decay] - plateau))
 
-    # t > 72h: 완전 소멸
+    # t > tail: 완전 소멸
     factor[elapsed > tail] = 0.0
 
     return factor

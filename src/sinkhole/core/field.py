@@ -115,7 +115,7 @@ class GridRiskField:
             r_new = compute_r(rain_raw, self._weights_cfg)    # (N,)
             self._r_scores = r_new
             self._r_event_time = np.full(len(self.grid_df), t_now)
-            self.source_status["rain"] = "ok"
+            self.source_status["rain"] = _status_for(rain_adapter, rain_raw)
         except Exception as e:
             self.source_status["rain"] = f"error: {type(e).__name__}"
 
@@ -132,7 +132,7 @@ class GridRiskField:
             self._g_scores = g_new
             self._g_sigma_raw = sigma_raw
             self._g_event_time = np.full(len(self.grid_df), t_now)
-            self.source_status["groundwater"] = "ok"
+            self.source_status["groundwater"] = _status_for(gw_adapter, sigma_raw)
         except Exception as e:
             self.source_status["groundwater"] = f"error: {type(e).__name__}"
 
@@ -142,7 +142,7 @@ class GridRiskField:
             t_new = compute_t(traffic_raw, self._weights_cfg)   # (N,)
             self._t_scores = t_new
             self._t_event_time = np.full(len(self.grid_df), t_now)
-            self.source_status["traffic"] = "ok"
+            self.source_status["traffic"] = _status_for(traffic_adapter, traffic_raw)
         except Exception as e:
             self.source_status["traffic"] = f"error: {type(e).__name__}"
 
@@ -175,7 +175,8 @@ class GridRiskField:
 
         # 총점 + 불확실성 (Phase 7-1 베이지안 융합)
         if use_bayes:
-            total, unc_arr = bayesian_fuse(self.baseline, r_dec, g_dec, t_dec)
+            variances = (self._weights_cfg.get("fusion") or {}).get("variances")
+            total, unc_arr = bayesian_fuse(self.baseline, r_dec, g_dec, t_dec, variances)
         else:
             total   = simple_fuse(self.baseline, r_dec, g_dec, t_dec)
             unc_arr = np.full(len(self.baseline), np.nan)
@@ -188,7 +189,14 @@ class GridRiskField:
         generated_at = datetime.now(tz=kst).isoformat(timespec="seconds")
 
         # ai_anomaly 판별 (Phase 7-2: 예측 잔차가 2.5σ 초과 시 이상으로 간주)
-        ai_anomaly_arr = np.abs(self._g_sigma_raw) > 2.5
+        anomaly_thr = float(
+            (self._weights_cfg.get("anomaly") or {}).get("sigma_threshold", 2.5)
+        )
+        # σ 이상도도 R/G/T와 같은 감쇠 함수를 적용한다 (web/js/sim.js와 동일 규칙).
+        g_sigma = apply_decay(
+            np.nan_to_num(self._g_sigma_raw, nan=0.0), elapsed_g, self._grid_cfg
+        )
+        ai_anomaly_arr = np.abs(g_sigma) > anomaly_thr
 
         # cells 배열 구성 (벡터 연산 후 list 변환)
         ids = self.grid_df["id"].tolist()
@@ -202,6 +210,7 @@ class GridRiskField:
                 "g": round(float(g_dec[i]), 2),
                 "t": round(float(t_dec[i]), 2),
                 "unc": round(float(unc_arr[i]), 4) if not np.isnan(unc_arr[i]) else None,
+                "gs": round(float(g_sigma[i]), 2),   # 지하수위 σ 이상도 (이상탐지 근거)
                 "ai_anomaly": bool(ai_anomaly_arr[i]),
             }
             for i in range(len(ids))
@@ -224,3 +233,18 @@ class GridRiskField:
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(snap, f, ensure_ascii=False)
+
+
+def _status_for(adapter, raw: np.ndarray) -> str:
+    """어댑터 출력으로 채널 상태 문자열을 정한다.
+
+    - "no_data":  모든 격자가 결측(np.nan) — 데이터를 받지 못함
+    - 그 외:      어댑터의 origin 속성 ("live" → "ok", "fixture", "sim")
+
+    화면에 "ok"(초록)는 실제 실시간 API로 값을 받은 경우에만 표시되도록 한다.
+    """
+    arr = np.asarray(raw, dtype=np.float64)
+    if arr.size == 0 or np.all(np.isnan(arr)):
+        return "no_data"
+    origin = getattr(adapter, "origin", "live")
+    return "ok" if origin == "live" else origin

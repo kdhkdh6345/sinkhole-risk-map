@@ -12,6 +12,8 @@ except ImportError:
 from .base import TrafficSourceAdapter
 
 class SeoulTrafficSource(TrafficSourceAdapter):
+
+    origin = "fixture"  # 데이터 출처: 고정 샘플 파일(data/fixtures). 실제 API 연동 전
     def __init__(self, json_path: str = "data/fixtures/traffic_sample.json"):
         self.json_path = json_path
 

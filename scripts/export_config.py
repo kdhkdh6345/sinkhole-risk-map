@@ -17,6 +17,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 WEIGHTS_YAML = PROJECT_ROOT / "config" / "weights.yaml"
 GRID_YAML = PROJECT_ROOT / "config" / "grid.yaml"
 OUT_JSON = PROJECT_ROOT / "web" / "data" / "config.json"
+# 브라우저(render.js)가 실제로 읽는 파일. 반드시 YAML에서 생성한다 (수작업 편집 금지).
+OUT_WEIGHTS = PROJECT_ROOT / "web" / "data" / "weights_cfg.json"
+OUT_GRID = PROJECT_ROOT / "web" / "data" / "grid_cfg.json"
 
 
 def export_config() -> None:
@@ -38,7 +41,11 @@ def export_config() -> None:
     with open(OUT_JSON, "w", encoding="utf-8") as f:
         json.dump(combined, f, ensure_ascii=False, indent=2)
         
-    print(f"[export_config] 설정 내보내기 완료: {OUT_JSON}")
+    for path, obj in ((OUT_WEIGHTS, weights), (OUT_GRID, grid)):
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(obj, f, ensure_ascii=False, indent=2)
+
+    print(f"[export_config] 설정 내보내기 완료: {OUT_JSON}, {OUT_WEIGHTS.name}, {OUT_GRID.name}")
 
 
 if __name__ == "__main__":
