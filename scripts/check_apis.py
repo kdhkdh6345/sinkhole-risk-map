@@ -100,6 +100,8 @@ def main() -> int:
     if seoul:
         base = f"http://openapi.seoul.go.kr:8088/{seoul}"
         link_id = citydata_traffic(base)
+        probe("서울시 실시간 도시데이터 — 장소코드(POI001)로 조회되는지 확인",
+              f"{base}/json/citydata/1/5/POI001", n=300)
         if link_id:
             probe(f"서울시 실시간 도로 소통 정보 (TrafficInfo, xml, 링크 {link_id})",
                   f"{base}/xml/TrafficInfo/1/5/{link_id}")

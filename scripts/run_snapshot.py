@@ -125,11 +125,11 @@ def main() -> int:
         #       (source_status에 "fixture" 또는 "no_data"로 표시됨. 실제 API 연동은 Phase 6 과제)
         from sinkhole.sources.kma_live import KmaLiveRainSource
         from sinkhole.sources.groundwater import SeoulGroundwaterSource
-        from sinkhole.sources.traffic import SeoulTrafficSource
+        from sinkhole.sources.traffic_live import SeoulCitydataTrafficSource
         
         rain_adapter = KmaLiveRainSource()  # 기상청 AWS → ASOS → 샘플 순서로 시도
         gw_adapter = SeoulGroundwaterSource()
-        traffic_adapter = SeoulTrafficSource()
+        traffic_adapter = SeoulCitydataTrafficSource()  # 서울 실시간 도시데이터 도로소통 (실패 시 샘플)
 
     t_start = time.perf_counter()
     field.update(rain_adapter, gw_adapter, traffic_adapter)
