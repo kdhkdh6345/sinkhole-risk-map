@@ -109,7 +109,10 @@ class KmaLiveRainSource(RainSourceAdapter):
             raise RuntimeError("requests 미설치")
         r = requests.get(url, params={**params, "authKey": self._key}, timeout=self.timeout)
         r.raise_for_status()
-        text = r.content.decode("euc-kr", errors="replace")
+        try:  # API허브 응답은 서비스마다 UTF-8 또는 EUC-KR
+            text = r.content.decode("utf-8")
+        except UnicodeDecodeError:
+            text = r.content.decode("euc-kr", errors="replace")
         if "인증" in text and ("오류" in text or "유효" in text or "확인" in text) and len(text) < 2000:
             raise RuntimeError(f"인증키 오류 응답: {text[:200]!r}")
         return text

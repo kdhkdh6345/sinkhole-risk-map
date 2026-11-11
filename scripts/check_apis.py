@@ -6,11 +6,11 @@ check_apis.py — 외부 API 연결 진단 (GitHub Actions 로그 확인용)
 
 각 API를 한 번씩 호출해 HTTP 상태와 응답 앞부분을 출력한다.
 키는 출력에서 '***'로 가린다. 실패해도 종료 코드는 항상 0 (배포를 막지 않음).
-이 출력 결과를 보고 교통·지하수 어댑터의 응답 파싱을 확정한다.
 """
 
 from __future__ import annotations
 
+import json
 import os
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
@@ -31,15 +31,53 @@ def _mask(text: str) -> str:
     return text
 
 
-def probe(title: str, url: str, params: dict | None = None, encoding: str = "utf-8", n: int = 900) -> None:
+def _decode(raw: bytes) -> str:
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("euc-kr", errors="replace")
+
+
+def probe(title: str, url: str, params: dict | None = None, n: int = 900) -> str:
     print(f"\n===== {title} =====")
     try:
         r = requests.get(url, params=params, timeout=20)
-        text = r.content.decode(encoding, errors="replace")
+        text = _decode(r.content)
         print(f"HTTP {r.status_code}  ({len(text)}자)")
         print(_mask(text[:n]))
+        return text
     except Exception as e:
         print(f"요청 실패: {type(e).__name__}: {_mask(str(e))[:300]}")
+        return ""
+
+
+def citydata_traffic(base: str) -> str | None:
+    """실시간 도시데이터에서 도로소통 부분만 구조를 보여준다. 첫 링크 아이디를 반환."""
+    print("\n===== 서울시 실시간 도시데이터 — 도로소통 부분 =====")
+    try:
+        r = requests.get(f"{base}/json/citydata/1/5/{quote('광화문·덕수궁')}", timeout=30)
+        data = json.loads(_decode(r.content))
+    except Exception as e:
+        print(f"요청/파싱 실패: {type(e).__name__}: {_mask(str(e))[:300]}")
+        return None
+    city = data.get("CITYDATA", {})
+    print("CITYDATA 최상위 키:", list(city.keys()))
+    road = city.get("ROAD_TRAFFIC_STTS")
+    if road is None:
+        print("ROAD_TRAFFIC_STTS 없음")
+        return None
+    if isinstance(road, dict):
+        print("ROAD_TRAFFIC_STTS 키:", list(road.keys()))
+        print("AVG_ROAD_DATA:", json.dumps(road.get("AVG_ROAD_DATA"), ensure_ascii=False)[:600])
+        links = road.get("ROAD_TRAFFIC_STTS") or []
+    else:
+        links = road
+    print(f"링크 개수: {len(links)}")
+    for item in links[:2]:
+        print(json.dumps(item, ensure_ascii=False)[:900])
+    if links and isinstance(links[0], dict):
+        return str(links[0].get("LINK_ID") or "")
+    return None
 
 
 def main() -> int:
@@ -51,24 +89,25 @@ def main() -> int:
     kma = KEYS["KMA_API_KEY"]
     if kma:
         tm = (datetime.now(tz=KST) - timedelta(minutes=2)).strftime("%Y%m%d%H%M")
-        probe("기상청 AWS 매분자료",
+        probe("기상청 AWS 매분자료 (앞부분)",
               "https://apihub.kma.go.kr/api/typ01/cgi-bin/url/nph-aws2_min",
-              {"tm2": tm, "stn": 0, "disp": 0, "help": 1, "authKey": kma}, "euc-kr", 1500)
-        probe("기상청 AWS 지점정보",
+              {"tm2": tm, "stn": 0, "disp": 0, "help": 1, "authKey": kma}, 400)
+        probe("기상청 AWS 지점정보 (403이면 API허브에서 '지점정보' 활용신청 필요)",
               "https://apihub.kma.go.kr/api/typ01/url/stn_inf.php",
-              {"inf": "AWS", "stn": "", "tm": "", "help": 1, "authKey": kma}, "euc-kr", 1500)
+              {"inf": "AWS", "stn": "", "tm": "", "help": 1, "authKey": kma}, 1500)
 
     seoul = KEYS["SEOUL_API_KEY"]
     if seoul:
-        base = f"http://openapi.seoul.go.kr:8088/{seoul}/json"
-        probe("서울시 실시간 도로 소통 정보 (TrafficInfo, 링크 미지정)", f"{base}/TrafficInfo/1/5/")
-        probe("서울시 실시간 도시데이터 (citydata, 광화문·덕수궁)",
-              f"{base}/citydata/1/5/{quote('광화문·덕수궁')}", n=1500)
+        base = f"http://openapi.seoul.go.kr:8088/{seoul}"
+        link_id = citydata_traffic(base)
+        if link_id:
+            probe(f"서울시 실시간 도로 소통 정보 (TrafficInfo, xml, 링크 {link_id})",
+                  f"{base}/xml/TrafficInfo/1/5/{link_id}")
 
     if KEYS["GW_API_KEY"]:
         print("\n===== 지하수 =====\nGW_API_KEY 등록됨 — 사용할 API 주소가 정해지면 진단 항목을 추가한다.")
 
-    print("\n진단 완료 (이 로그를 복사해 전달하면 어댑터를 마무리할 수 있음)")
+    print("\n진단 완료")
     return 0
 
 
