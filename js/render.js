@@ -13,13 +13,14 @@ const {DeckGL, PolygonLayer, GeoJsonLayer, MapView, PathLayer, ScatterplotLayer}
 let DECK, GRID_CFG, WEIGHTS_CFG;
 let GRID_CELLS = {}, SNAP_CELLS = {}, SIM_CELLS = {}, HISTORY_DATA = {}, SNAP_META = {};
 let DONG_GEOJSON = null, DONG_HISTORY = {};
-let NATIONWIDE_GEOJSON = null, PIPES_GEOJSON = null, COMPLAINTS_DATA = null, PIPE_PENALTIES = null, NEWS_ISSUES = null;
+let NATIONWIDE_GEOJSON = null, PIPES_GEOJSON = null, SEWER_GU = null, COMPLAINTS_DATA = null, PIPE_PENALTIES = null, NEWS_ISSUES = null;
 
 let activeLayers = {
   nationwide: false,
   grid: true,
   dong: true,
   pipes: true,
+  subway: false,
   complaints: true,
   ai_anomaly: true,
   points: false,
@@ -60,7 +61,7 @@ async function init() {
     });
 
     setLoading('데이터 로드 중…');
-    const [gridData, snapData, gridCfgData, weightsCfgData, parityData, historyData, dongGeoJson, dongHistory, nationwideGeoJson, pipesGeoJson, complaintsData, pipePenalties, newsIssuesData] = await Promise.all([
+    const [gridData, snapData, gridCfgData, weightsCfgData, parityData, historyData, dongGeoJson, dongHistory, nationwideGeoJson, pipesGeoJson, complaintsData, pipePenalties, newsIssuesData, sewerGu] = await Promise.all([
       fetchJSON(`data/grid.json?t=${Date.now()}`),
       fetchJSON(`data/snapshot_calm.json?t=${Date.now()}`),
       fetchJSON(`data/grid_cfg.json?t=${Date.now()}`),
@@ -73,7 +74,8 @@ async function init() {
       fetchJSON(`data/seoul_subway.geojson?t=${Date.now()}`).catch(() => null),
       fetchJSON(`data/mock_complaints.json?t=${Date.now()}`).catch(() => null),
       fetchJSON(`data/pipe_penalties.json?t=${Date.now()}`).catch(() => null),
-      fetchJSON(`data/news_issues.json?t=${Date.now()}`).catch(() => null)
+      fetchJSON(`data/news_issues.json?t=${Date.now()}`).catch(() => null),
+      fetchJSON(`data/seoul_gu_sewer.geojson?t=${Date.now()}`).catch(() => null)
     ]);
 
     GRID_CFG = gridCfgData;
@@ -84,6 +86,7 @@ async function init() {
     if (dongHistory) DONG_HISTORY = dongHistory;
     if (nationwideGeoJson) NATIONWIDE_GEOJSON = nationwideGeoJson;
     if (pipesGeoJson) PIPES_GEOJSON = pipesGeoJson;
+    if (sewerGu) SEWER_GU = sewerGu;
     if (complaintsData) COMPLAINTS_DATA = complaintsData;
     if (pipePenalties) PIPE_PENALTIES = pipePenalties;
     if (newsIssuesData) NEWS_ISSUES = newsIssuesData.issues;
@@ -272,46 +275,41 @@ function updateDeckGLLayer() {
     }));
   }
 
-  if (activeLayers.pipes && PIPES_GEOJSON) {
-    // 지하철 노선만 필터
-    const subwayData = {
-      type: 'FeatureCollection',
-      features: PIPES_GEOJSON.features.filter(f => f.properties.type === 'subway')
-    };
-    // 노후관로만 필터
-    const pipeData = {
-      type: 'FeatureCollection',
-      features: PIPES_GEOJSON.features.filter(f => f.properties.type === 'pipe')
-    };
+  // 하수관 노후율(구별, 실측 9개 구·추정 16개 구) + 실시간 하수관로 수위(툴팁)
+  if (activeLayers.pipes && SEWER_GU) {
+    layers.push(new GeoJsonLayer({
+      id: 'sewer-gu-layer',
+      data: SEWER_GU,
+      stroked: true,
+      filled: true,
+      getFillColor: d => {
+        const r = d.properties.ratio_30y;
+        if (r == null) return [0, 0, 0, 0];
+        const t = Math.max(0, Math.min(1, (r - 0.50) / 0.17));   // 노후율 50%~67%를 색 범위로
+        const alpha = d.properties.data_type === 'measured' ? 120 : 60; // 추정값은 옅게
+        return [255, Math.round(200 - 140 * t), Math.round(80 - 60 * t), alpha];
+      },
+      getLineColor: d => d.properties.data_type === 'measured' ? [255, 140, 40, 230] : [255, 200, 120, 140],
+      getLineWidth: 40,
+      lineWidthMinPixels: 1,
+      pickable: true,
+      onClick: handleGridClick
+    }));
+  }
 
-    // 지하철 노선 레이어 (노선별 실제 색상)
+  // 지하철 노선 (현재 시연용 가상 데이터, 기본 꺼짐)
+  if (activeLayers.subway && PIPES_GEOJSON) {
     layers.push(new GeoJsonLayer({
       id: 'subway-layer',
-      data: subwayData,
+      data: { type: 'FeatureCollection', features: PIPES_GEOJSON.features.filter(f => f.properties.type === 'subway') },
       stroked: true,
       filled: false,
       getLineColor: d => {
         const hex = d.properties.color || '#0096FF';
-        const r = parseInt(hex.slice(1, 3), 16);
-        const g = parseInt(hex.slice(3, 5), 16);
-        const b = parseInt(hex.slice(5, 7), 16);
-        return [r, g, b, 220];
+        return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16), 220];
       },
       getLineWidth: 80,
       lineWidthMinPixels: 3,
-      pickable: true,
-      onClick: handleGridClick
-    }));
-
-    // 상하수도 노후 관로 레이어
-    layers.push(new GeoJsonLayer({
-      id: 'pipes-layer',
-      data: pipeData,
-      stroked: true,
-      filled: false,
-      getLineColor: [255, 120, 30, 180],
-      getLineWidth: 30,
-      lineWidthMinPixels: 2,
       pickable: true,
       onClick: handleGridClick
     }));
@@ -357,6 +355,8 @@ window.toggleLayers = () => {
   activeLayers.grid = document.getElementById('chk-layer-grid').checked;
   activeLayers.dong = document.getElementById('chk-layer-dong').checked;
   activeLayers.pipes = document.getElementById('chk-layer-pipes').checked;
+  const subwayEl = document.getElementById('chk-layer-subway');
+  if (subwayEl) activeLayers.subway = subwayEl.checked;
   activeLayers.complaints = document.getElementById('chk-layer-complaints').checked;
   
   const anomalyEl = document.getElementById('chk-layer-ai-anomaly');
@@ -385,6 +385,21 @@ window.changeMapTheme = () => {
 function getTooltipContent({object, layer}) {
   if (!object) return null;
 
+  if (layer && layer.id === 'sewer-gu-layer') {
+    const p = object.properties;
+    const lv = ((SNAP_META.sewer || {}).by_gu || {})[p.gu];
+    const pct = v => v == null ? '-' : `${Math.round(v * 1000) / 10}%`;
+    const kind = p.data_type === 'measured' ? '실측 (2023.12 기준)' : '추정';
+    const live = lv
+      ? `• 하수관 최고 수위: <b>${lv.max_m.toFixed(2)}m</b> (측정소 ${lv.n}곳 중)<br>• 위치: ${lv.max_addr}<br>• 측정: ${lv.time}`
+      : '• 실시간 하수관 수위: 자료 없음';
+    return { html: `<div style="font-family:'Noto Sans KR',sans-serif;font-size:13px;color:#fff;background:rgba(20,12,0,.95);padding:12px;border-radius:6px;border:1px solid #ff8c28;min-width:250px;">
+      <div style="font-weight:bold;font-size:14px;margin-bottom:6px;color:#ffb84d;">🚰 ${p.gu} 하수관</div>
+      • 30년 이상 노후관: <b>${pct(p.ratio_30y)}</b> · 50년 이상: ${pct(p.ratio_50y)}<br>
+      <span style="opacity:.75">• 노후율 자료: ${kind}</span><br>
+      <div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,140,40,.4)">${live}</div>
+      <div style="opacity:.6;font-size:11px;margin-top:6px">출처: 서울 열린데이터광장 '서울시 하수관로 수위 현황'</div></div>` };
+  }
   if (layer && (layer.id === 'subway-layer' || layer.id === 'pipe-layer')) {
     return { html: `<div style="padding: 10px; background: rgba(0,0,0,0.8); color: white; border-radius: 4px;">📍 ${object.properties.name} (${object.properties.type})</div>` };
   }
@@ -549,7 +564,8 @@ function applySnapshot(snapData) {
     generated_at: snapData.generated_at,
     mode: snapData.mode,
     source_status: snapData.source_status,
-    source_detail: snapData.source_detail || {}
+    source_detail: snapData.source_detail || {},
+    sewer: snapData.sewer || null
   };
   lastGeneratedAt = snapData.generated_at;
 
@@ -750,7 +766,11 @@ function handleGridClick(info) {
   document.getElementById('llm-output').innerHTML = '작성 시작을 눌러주세요.';
   document.getElementById('llm-output').style.color = '#8b949e';
   
-  if (info.layer.id === 'subway-layer' || info.layer.id === 'pipe-layer') {
+  if (info.layer.id === 'sewer-gu-layer') {
+    const p = info.object.properties;
+    selectedGridInfo = { type: 'pipe', name: p.gu, ptype: 'sewer' };
+    document.getElementById('llm-target-info').innerHTML = `📍 <b>${p.gu}</b> (노후 하수관·실시간 수위)`;
+  } else if (info.layer.id === 'subway-layer' || info.layer.id === 'pipe-layer') {
     selectedGridInfo = { type: 'pipe', name: info.object.properties.name, ptype: info.object.properties.type };
     document.getElementById('llm-target-info').innerHTML = `📍 <b>${selectedGridInfo.name}</b> (노후도/안전 등급 분석)`;
   } else if (info.layer.id === 'complaints-layer') {
@@ -795,7 +815,7 @@ function generateLlmDraft() {
   let draftText = '';
   if (selectedGridInfo.type === 'pipe') {
     draftText = `[안전안내문자]
-최근 ${selectedGridInfo.name} 주변 노후 인프라(관로/지하철)에서 지반 침하 위험이 분석되었습니다.
+최근 ${selectedGridInfo.name} 일대 노후 하수관 및 하수관로 수위 상황을 고려할 때 지반 침하에 주의가 필요합니다.
 해당 구간 통행 시 우회해 주시고 지반 이상 징후 발견 시 120으로 즉시 신고 바랍니다.`;
   } else if (selectedGridInfo.type === 'ai') {
     draftText = `[긴급재난문자]
