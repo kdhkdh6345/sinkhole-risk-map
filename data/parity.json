@@ -1,9 +1,9 @@
 {
   "description": "Python-JS 일치 검증용 고정 케이스 (scripts/build_parity.py가 생성, 수작업 편집 금지)",
   "decay": {
-    "plateau_hours": 0,
-    "tail_hours": 96,
-    "residual_at_tail": 0.01
+    "plateau_hours": 24,
+    "tail_hours": 72,
+    "residual_at_tail": 0.05
   },
   "stages": {
     "stage1": {
@@ -39,8 +39,8 @@
       "g_raw": 0.0,
       "t_raw": 3.0,
       "gs_raw": 0.0,
-      "decay_factor": 0.953162,
-      "score": 8.928723,
+      "decay_factor": 1.0,
+      "score": 8.937824,
       "unc": 1.52696,
       "stage": 1,
       "ai_anomaly": false
@@ -53,8 +53,8 @@
       "g_raw": 0.0,
       "t_raw": 3.0,
       "gs_raw": 0.0,
-      "decay_factor": 0.749894,
-      "score": 8.889228,
+      "decay_factor": 1.0,
+      "score": 8.937824,
       "unc": 1.52696,
       "stage": 1,
       "ai_anomaly": false
@@ -67,8 +67,8 @@
       "g_raw": 0.0,
       "t_raw": 3.0,
       "gs_raw": 0.0,
-      "decay_factor": 0.316228,
-      "score": 8.804967,
+      "decay_factor": 1.0,
+      "score": 8.937824,
       "unc": 1.52696,
       "stage": 1,
       "ai_anomaly": false
@@ -81,8 +81,8 @@
       "g_raw": 0.0,
       "t_raw": 3.0,
       "gs_raw": 0.0,
-      "decay_factor": 0.1,
-      "score": 8.762953,
+      "decay_factor": 0.223607,
+      "score": 8.78697,
       "unc": 1.52696,
       "stage": 1,
       "ai_anomaly": false
@@ -95,8 +95,8 @@
       "g_raw": 0.0,
       "t_raw": 3.0,
       "gs_raw": 0.0,
-      "decay_factor": 0.031623,
-      "score": 8.749668,
+      "decay_factor": 0.05,
+      "score": 8.753238,
       "unc": 1.52696,
       "stage": 1,
       "ai_anomaly": false
@@ -109,8 +109,8 @@
       "g_raw": 0.0,
       "t_raw": 3.0,
       "gs_raw": 0.0,
-      "decay_factor": 0.01,
-      "score": 8.745466,
+      "decay_factor": 0.0,
+      "score": 8.743523,
       "unc": 1.52696,
       "stage": 1,
       "ai_anomaly": false
@@ -151,8 +151,8 @@
       "g_raw": 0.0,
       "t_raw": 3.0,
       "gs_raw": -0.5,
-      "decay_factor": 0.953162,
-      "score": 13.867386,
+      "decay_factor": 1.0,
+      "score": 14.119171,
       "unc": 1.52696,
       "stage": 2,
       "ai_anomaly": false
@@ -165,10 +165,10 @@
       "g_raw": 0.0,
       "t_raw": 3.0,
       "gs_raw": -0.5,
-      "decay_factor": 0.749894,
-      "score": 12.77469,
+      "decay_factor": 1.0,
+      "score": 14.119171,
       "unc": 1.52696,
-      "stage": 1,
+      "stage": 2,
       "ai_anomaly": false
     },
     {
@@ -179,10 +179,10 @@
       "g_raw": 0.0,
       "t_raw": 3.0,
       "gs_raw": -0.5,
-      "decay_factor": 0.316228,
-      "score": 10.443452,
+      "decay_factor": 1.0,
+      "score": 14.119171,
       "unc": 1.52696,
-      "stage": 1,
+      "stage": 2,
       "ai_anomaly": false
     },
     {
@@ -193,8 +193,8 @@
       "g_raw": 0.0,
       "t_raw": 3.0,
       "gs_raw": -0.5,
-      "decay_factor": 0.1,
-      "score": 9.281088,
+      "decay_factor": 0.223607,
+      "score": 9.945555,
       "unc": 1.52696,
       "stage": 1,
       "ai_anomaly": false
@@ -207,8 +207,8 @@
       "g_raw": 0.0,
       "t_raw": 3.0,
       "gs_raw": -0.5,
-      "decay_factor": 0.031623,
-      "score": 8.913516,
+      "decay_factor": 0.05,
+      "score": 9.012306,
       "unc": 1.52696,
       "stage": 1,
       "ai_anomaly": false
@@ -221,8 +221,8 @@
       "g_raw": 0.0,
       "t_raw": 3.0,
       "gs_raw": -0.5,
-      "decay_factor": 0.01,
-      "score": 8.79728,
+      "decay_factor": 0.0,
+      "score": 8.743523,
       "unc": 1.52696,
       "stage": 1,
       "ai_anomaly": false
@@ -263,8 +263,8 @@
       "g_raw": 10.0,
       "t_raw": 3.0,
       "gs_raw": -3.2,
-      "decay_factor": 0.953162,
-      "score": 15.991011,
+      "decay_factor": 1.0,
+      "score": 16.34715,
       "unc": 1.52696,
       "stage": 3,
       "ai_anomaly": true
@@ -277,11 +277,11 @@
       "g_raw": 10.0,
       "t_raw": 3.0,
       "gs_raw": -3.2,
-      "decay_factor": 0.749894,
-      "score": 14.445439,
+      "decay_factor": 1.0,
+      "score": 16.34715,
       "unc": 1.52696,
-      "stage": 2,
-      "ai_anomaly": false
+      "stage": 3,
+      "ai_anomaly": true
     },
     {
       "case": "stage3_grid",
@@ -291,11 +291,11 @@
       "g_raw": 10.0,
       "t_raw": 3.0,
       "gs_raw": -3.2,
-      "decay_factor": 0.316228,
-      "score": 11.148001,
+      "decay_factor": 1.0,
+      "score": 16.34715,
       "unc": 1.52696,
-      "stage": 1,
-      "ai_anomaly": false
+      "stage": 3,
+      "ai_anomaly": true
     },
     {
       "case": "stage3_grid",
@@ -305,8 +305,8 @@
       "g_raw": 10.0,
       "t_raw": 3.0,
       "gs_raw": -3.2,
-      "decay_factor": 0.1,
-      "score": 9.503886,
+      "decay_factor": 0.223607,
+      "score": 10.443746,
       "unc": 1.52696,
       "stage": 1,
       "ai_anomaly": false
@@ -319,8 +319,8 @@
       "g_raw": 10.0,
       "t_raw": 3.0,
       "gs_raw": -3.2,
-      "decay_factor": 0.031623,
-      "score": 8.983971,
+      "decay_factor": 0.05,
+      "score": 9.123705,
       "unc": 1.52696,
       "stage": 1,
       "ai_anomaly": false
@@ -333,8 +333,8 @@
       "g_raw": 10.0,
       "t_raw": 3.0,
       "gs_raw": -3.2,
-      "decay_factor": 0.01,
-      "score": 8.81956,
+      "decay_factor": 0.0,
+      "score": 8.743523,
       "unc": 1.52696,
       "stage": 1,
       "ai_anomaly": false
@@ -375,8 +375,8 @@
       "g_raw": 10.0,
       "t_raw": 4.5,
       "gs_raw": -3.0,
-      "decay_factor": 0.953162,
-      "score": 10.837497,
+      "decay_factor": 1.0,
+      "score": 11.198187,
       "unc": 1.52696,
       "stage": 1,
       "ai_anomaly": true
@@ -389,11 +389,11 @@
       "g_raw": 10.0,
       "t_raw": 4.5,
       "gs_raw": -3.0,
-      "decay_factor": 0.749894,
-      "score": 9.272178,
+      "decay_factor": 1.0,
+      "score": 11.198187,
       "unc": 1.52696,
       "stage": 1,
-      "ai_anomaly": false
+      "ai_anomaly": true
     },
     {
       "case": "low_b_rain",
@@ -403,11 +403,11 @@
       "g_raw": 10.0,
       "t_raw": 4.5,
       "gs_raw": -3.0,
-      "decay_factor": 0.316228,
-      "score": 5.932609,
+      "decay_factor": 1.0,
+      "score": 11.198187,
       "unc": 1.52696,
       "stage": 1,
-      "ai_anomaly": false
+      "ai_anomaly": true
     },
     {
       "case": "low_b_rain",
@@ -417,8 +417,8 @@
       "g_raw": 10.0,
       "t_raw": 4.5,
       "gs_raw": -3.0,
-      "decay_factor": 0.1,
-      "score": 4.267487,
+      "decay_factor": 0.223607,
+      "score": 5.219355,
       "unc": 1.52696,
       "stage": 1,
       "ai_anomaly": false
@@ -431,8 +431,8 @@
       "g_raw": 10.0,
       "t_raw": 4.5,
       "gs_raw": -3.0,
-      "decay_factor": 0.031623,
-      "score": 3.740929,
+      "decay_factor": 0.05,
+      "score": 3.882448,
       "unc": 1.52696,
       "stage": 1,
       "ai_anomaly": false
@@ -445,8 +445,8 @@
       "g_raw": 10.0,
       "t_raw": 4.5,
       "gs_raw": -3.0,
-      "decay_factor": 0.01,
-      "score": 3.574417,
+      "decay_factor": 0.0,
+      "score": 3.497409,
       "unc": 1.52696,
       "stage": 1,
       "ai_anomaly": false
