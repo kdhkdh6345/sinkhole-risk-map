@@ -47,6 +47,7 @@ jobs:
       run: |
         # Fetch real-time news
         python scripts/crawl_news.py
+        python scripts/fetch_sinkhole_history.py || true
         
         # Generate base data first
         python scripts/build_grid.py
