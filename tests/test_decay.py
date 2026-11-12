@@ -139,22 +139,22 @@ def test_accelerated_clock_decay_curve():
     r0 = snap_0h["cells"][0]["r"]
     assert r0 > 0, f"heavy_rain에서 R 점수가 0: {r0}"
 
-    # ── 48h 시점: r ≈ r0 × 0.1 ─────────────────────────────────────
+    # ── 48h 시점: r ≈ r0 × sqrt(0.05) ≈ 0.2236 (24h 유지 → 72h 5%) ──
     clock.set_virtual_time(t_event + 48 * 3600)
     snap_48h = field.snapshot()
     r_48h = snap_48h["cells"][0]["r"]
     ratio_48h = r_48h / r0
-    assert abs(ratio_48h - 0.1) < 0.02, (
-        f"48h: ratio={ratio_48h:.4f}, 기대≈0.1"
+    assert abs(ratio_48h - 0.2236) < 0.02, (
+        f"48h: ratio={ratio_48h:.4f}, 기대≈0.2236"
     )
 
-    # ── 96h 시점: r ≈ r0 × 0.01 ──────────────────────────────────────
-    clock.set_virtual_time(t_event + 96 * 3600)
-    snap_96h = field.snapshot()
-    r_96h = snap_96h["cells"][0]["r"]
-    ratio_96h = r_96h / r0
-    assert abs(ratio_96h - 0.01) < 0.005, (
-        f"96h: ratio={ratio_96h:.4f}, 기대≈0.01"
+    # ── 72h 시점: r ≈ r0 × 0.05 ──────────────────────────────────────
+    clock.set_virtual_time(t_event + 72 * 3600)
+    snap_72h = field.snapshot()
+    r_72h = snap_72h["cells"][0]["r"]
+    ratio_72h = r_72h / r0
+    assert abs(ratio_72h - 0.05) < 0.01, (
+        f"72h: ratio={ratio_72h:.4f}, 기대≈0.05"
     )
 
     # ── 100h 시점: r = 0 ───────────────────────────────────────────────
