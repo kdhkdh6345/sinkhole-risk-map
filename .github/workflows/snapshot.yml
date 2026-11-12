@@ -36,6 +36,7 @@ jobs:
         KMA_API_KEY: ${{ secrets.KMA_API_KEY }}
         SEOUL_API_KEY: ${{ secrets.SEOUL_API_KEY }}
         GW_API_KEY: ${{ secrets.GW_API_KEY }}
+        JIS_API_KEY: ${{ secrets.JIS_API_KEY }}
       run: python scripts/check_apis.py
 
     - name: Generate new snapshot
