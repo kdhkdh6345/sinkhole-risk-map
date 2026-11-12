@@ -154,6 +154,14 @@ def main() -> int:
 
     # ── 7-1. 하수관로 실시간 수위 (지도 표시용, 점수에는 미반영) ─────────────
     if args.mode == "real":
+        try:  # 지하철 실제 노선 (OpenStreetMap, 30일마다만 새로 받음)
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            from fetch_subway_osm import fetch as fetch_subway
+            print(f"  🚇 subway: {fetch_subway()}")
+            from fetch_sinkhole_history import fetch as fetch_history
+            print(f"  🕳️ history: {fetch_history()}")
+        except Exception as e:
+            print(f"  ⚠️  subway: 건너뜀 ({type(e).__name__})")
         from sinkhole.sources.sewer_live import SeoulSewerLevelSource
         sewer_src = SeoulSewerLevelSource()
         sewer = sewer_src.fetch()

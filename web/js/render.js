@@ -11,9 +11,9 @@
 const {DeckGL, PolygonLayer, GeoJsonLayer, MapView, PathLayer, ScatterplotLayer} = deck;
 
 let DECK, GRID_CFG, WEIGHTS_CFG;
-let GRID_CELLS = {}, SNAP_CELLS = {}, SIM_CELLS = {}, HISTORY_DATA = {}, SNAP_META = {};
+let GRID_CELLS = {}, SNAP_CELLS = {}, SIM_CELLS = {}, HISTORY_DATA = {}, SNAP_META = {}, HISTORY_META = null;
 let DONG_GEOJSON = null, DONG_HISTORY = {};
-let NATIONWIDE_GEOJSON = null, PIPES_GEOJSON = null, SEWER_GU = null, COMPLAINTS_DATA = null, PIPE_PENALTIES = null, NEWS_ISSUES = null;
+let NATIONWIDE_GEOJSON = null, PIPES_GEOJSON = null, SEWER_GU = null, SUBWAY_OSM = null, COMPLAINTS_DATA = null, PIPE_PENALTIES = null, NEWS_ISSUES = null;
 
 let activeLayers = {
   nationwide: false,
@@ -61,7 +61,7 @@ async function init() {
     });
 
     setLoading('데이터 로드 중…');
-    const [gridData, snapData, gridCfgData, weightsCfgData, parityData, historyData, dongGeoJson, dongHistory, nationwideGeoJson, pipesGeoJson, complaintsData, pipePenalties, newsIssuesData, sewerGu] = await Promise.all([
+    const [gridData, snapData, gridCfgData, weightsCfgData, parityData, historyData, dongGeoJson, dongHistory, nationwideGeoJson, pipesGeoJson, complaintsData, pipePenalties, newsIssuesData, sewerGu, subwayOsm, jisHistory] = await Promise.all([
       fetchJSON(`data/grid.json?t=${Date.now()}`),
       fetchJSON(`data/snapshot_calm.json?t=${Date.now()}`),
       fetchJSON(`data/grid_cfg.json?t=${Date.now()}`),
@@ -75,18 +75,28 @@ async function init() {
       fetchJSON(`data/mock_complaints.json?t=${Date.now()}`).catch(() => null),
       fetchJSON(`data/pipe_penalties.json?t=${Date.now()}`).catch(() => null),
       fetchJSON(`data/news_issues.json?t=${Date.now()}`).catch(() => null),
-      fetchJSON(`data/seoul_gu_sewer.geojson?t=${Date.now()}`).catch(() => null)
+      fetchJSON(`data/seoul_gu_sewer.geojson?t=${Date.now()}`).catch(() => null),
+      fetchJSON(`data/snapshot_subway_osm.json?t=${Date.now()}`).catch(() => null),
+      fetchJSON(`data/snapshot_sinkhole_history.json?t=${Date.now()}`).catch(() => null)
     ]);
 
     GRID_CFG = gridCfgData;
     WEIGHTS_CFG = weightsCfgData;
     updateStageLegend(WEIGHTS_CFG);
-    if (historyData) HISTORY_DATA = historyData;
+    // 과거 싱크홀: 국토교통부 지하안전정보(실제 사고)가 있으면 그것만 사용.
+    // 없으면 기존 파일 중 보도 기반 실제 사고만 남기고, 가상 배치 항목은 쓰지 않는다.
+    if (jisHistory && jisHistory.events && jisHistory.events.length) {
+      HISTORY_DATA = jisHistory.by_grid || {};
+      HISTORY_META = jisHistory.meta || null;
+    } else if (historyData) {
+      HISTORY_DATA = Object.fromEntries(Object.entries(historyData).filter(([, v]) => !String(v.location || '').includes('가상')));
+    }
     if (dongGeoJson) DONG_GEOJSON = dongGeoJson;
-    if (dongHistory) DONG_HISTORY = dongHistory;
+    DONG_HISTORY = (jisHistory && jisHistory.by_dong) ? jisHistory.by_dong : {};  // 가상 이력 기반 집계는 쓰지 않음
     if (nationwideGeoJson) NATIONWIDE_GEOJSON = nationwideGeoJson;
     if (pipesGeoJson) PIPES_GEOJSON = pipesGeoJson;
     if (sewerGu) SEWER_GU = sewerGu;
+    if (subwayOsm && subwayOsm.features && subwayOsm.features.length) SUBWAY_OSM = subwayOsm;
     if (complaintsData) COMPLAINTS_DATA = complaintsData;
     if (pipePenalties) PIPE_PENALTIES = pipePenalties;
     if (newsIssuesData) NEWS_ISSUES = newsIssuesData.issues;
@@ -297,11 +307,11 @@ function updateDeckGLLayer() {
     }));
   }
 
-  // 지하철 노선 (현재 시연용 가상 데이터, 기본 꺼짐)
-  if (activeLayers.subway && PIPES_GEOJSON) {
+  // 지하철 노선: OpenStreetMap 실제 노선 (수집본이 없으면 표시하지 않음)
+  if (activeLayers.subway && SUBWAY_OSM) {
     layers.push(new GeoJsonLayer({
       id: 'subway-layer',
-      data: { type: 'FeatureCollection', features: PIPES_GEOJSON.features.filter(f => f.properties.type === 'subway') },
+      data: SUBWAY_OSM,
       stroked: true,
       filled: false,
       getLineColor: d => {
@@ -401,7 +411,8 @@ function getTooltipContent({object, layer}) {
       <div style="opacity:.6;font-size:11px;margin-top:6px">출처: 서울 열린데이터광장 '서울시 하수관로 수위 현황'</div></div>` };
   }
   if (layer && (layer.id === 'subway-layer' || layer.id === 'pipe-layer')) {
-    return { html: `<div style="padding: 10px; background: rgba(0,0,0,0.8); color: white; border-radius: 4px;">📍 ${object.properties.name} (${object.properties.type})</div>` };
+    const p = object.properties;
+    return { html: `<div style="padding: 10px; background: rgba(0,0,0,0.85); color: white; border-radius: 4px;">🚇 <b>${p.name}</b>${p.ref ? ` (${p.ref})` : ''}<div style="opacity:.6;font-size:11px;margin-top:4px">© OpenStreetMap contributors</div></div>` };
   }
   if (layer && layer.id === 'ai-anomaly-layer') {
     const { id, gu, score, gs } = object;
@@ -476,7 +487,11 @@ function getTooltipContent({object, layer}) {
             <span style="color: rgba(255,255,255,0.8);">발생 일자:</span> <span style="font-weight: 500;">${hist.date}</span>
             <span style="color: rgba(255,255,255,0.8);">발생 시각:</span> <span style="font-weight: 500;">${hist.time}</span>
             <span style="color: rgba(255,255,255,0.8);">발생 위치:</span> <span style="font-weight: 500;">${hist.location}</span>
+            ${hist.cause ? `<span style="color: rgba(255,255,255,0.8);">발생 원인:</span> <span style="font-weight: 500;">${hist.cause}</span>` : ''}
+            ${hist.size ? `<span style="color: rgba(255,255,255,0.8);">규모:</span> <span style="font-weight: 500;">${hist.size}</span>` : ''}
+            ${hist.count > 1 ? `<span style="color: rgba(255,255,255,0.8);">이 구역:</span> <span style="font-weight: 500;">총 ${hist.count}건 (최근 1건 표시)</span>` : ''}
           </div>
+          <div style="opacity:.75;font-size:11px;margin-top:6px">${HISTORY_META ? '출처: 국토교통부 지하안전정보' : '출처: 언론 보도'}</div>
         </div>
       `
     };

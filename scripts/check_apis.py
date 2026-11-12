@@ -21,7 +21,7 @@ except ImportError:  # pragma: no cover
     requests = None  # type: ignore[assignment]
 
 KST = timezone(timedelta(hours=9))
-KEYS = {k: os.getenv(k, "") for k in ("KMA_API_KEY", "SEOUL_API_KEY", "GW_API_KEY")}
+KEYS = {k: os.getenv(k, "") for k in ("KMA_API_KEY", "SEOUL_API_KEY", "GW_API_KEY", "JIS_API_KEY")}
 
 
 def _mask(text: str) -> str:
@@ -113,6 +113,15 @@ def main() -> int:
         if link_id:
             probe(f"서울시 실시간 도로 소통 정보 (TrafficInfo, xml, 링크 {link_id})",
                   f"{base}/xml/TrafficInfo/1/5/{link_id}")
+
+    jis = KEYS["JIS_API_KEY"]
+    if jis:
+        today = datetime.now(tz=KST)
+        probe("국토교통부 지하안전정보 — 지반침하사고 리스트 (최근 1년, 3건)",
+              "http://apis.data.go.kr/1611000/undergroundsafetyinfo01/getSubsidenceList01",
+              {"serviceKey": jis, "_type": "json", "type": "json", "numOfRows": 3, "pageNo": 1,
+               "sagoDateFrom": (today - timedelta(days=365)).strftime("%Y%m%d"), "sagoDateTo": today.strftime("%Y%m%d")},
+              n=1200)
 
     # 지하수(GIMS)는 호출 한도가 있어 진단에서 호출하지 않는다. 상태는 Generate new snapshot 로그에서 확인.
 
