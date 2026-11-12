@@ -61,7 +61,10 @@ def parse_items(text: str) -> tuple[list[dict], int | None, str]:
 
 def _get(op: str, params: dict) -> tuple[list[dict], int | None, str]:
     import requests
-    p = {"serviceKey": os.getenv("JIS_API_KEY", ""), "_type": "json", "type": "json", **params}
+    from urllib.parse import unquote
+    # Encoding 키(%2B, %3D 포함)를 넣어도 두 번 인코딩되지 않도록 먼저 풀어 둔다. Decoding 키는 그대로다.
+    key = unquote(os.getenv("JIS_API_KEY", "").strip())
+    p = {"serviceKey": key, "_type": "json", "type": "json", **params}
     r = requests.get(f"{BASE}/{op}", params=p, timeout=30)
     body = r.content.decode("utf-8", errors="replace")
     if r.status_code != 200:
