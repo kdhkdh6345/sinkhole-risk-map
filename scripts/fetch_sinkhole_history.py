@@ -34,6 +34,7 @@ BASE = "http://apis.data.go.kr/1611000/undergroundsafetyinfo01"
 KST = timezone(timedelta(hours=9))
 START = "20180101"   # 지하안전법 시행(2018.1) 이후 자료
 REFRESH_HOURS = 24
+PAGE_ROWS = 100      # 한 페이지 건수 (너무 크면 400 오류)
 
 
 # ── 응답 파싱 (JSON/XML 모두 대응) ────────────────────────────────────────
@@ -62,8 +63,11 @@ def _get(op: str, params: dict) -> tuple[list[dict], int | None, str]:
     import requests
     p = {"serviceKey": os.getenv("JIS_API_KEY", ""), "_type": "json", "type": "json", **params}
     r = requests.get(f"{BASE}/{op}", params=p, timeout=30)
-    r.raise_for_status()
-    return parse_items(r.content.decode("utf-8", errors="replace"))
+    body = r.content.decode("utf-8", errors="replace")
+    if r.status_code != 200:
+        # 오류 원인을 로그에서 바로 볼 수 있도록 응답 본문 앞부분을 함께 남긴다 (키는 남기지 않음).
+        raise RuntimeError(f"HTTP {r.status_code} ({op}, {params}) 응답: {body[:200]!r}")
+    return parse_items(body)
 
 
 # ── 위치: 행정동 이름 매칭 ────────────────────────────────────────────────
@@ -131,16 +135,23 @@ def grade_of(ev: dict) -> int:
 # ── 메인 ─────────────────────────────────────────────────────────────────
 def build(now: datetime, prev: dict) -> tuple[dict, str]:
     known = {e["sagoNo"]: e for e in prev.get("events", [])}
-    rows, page = [], 1
-    while page <= 40:
-        items, total, code = _get("getSubsidenceList01", {"sagoDateFrom": START, "sagoDateTo": now.strftime("%Y%m%d"),
-                                                          "numOfRows": 500, "pageNo": page})
-        if not items and page == 1:
-            raise RuntimeError(f"목록 응답 없음 (resultCode={code or '-'})")
-        rows += items
-        if not items or (total is not None and len(rows) >= total) or len(items) < 500:
-            break
-        page += 1
+    # 한 번에 긴 기간·많은 건수를 요청하면 400 Bad Request가 나므로, 1년 단위로 100건씩 나눠 받는다.
+    rows, codes = [], []
+    for year in range(int(START[:4]), now.year + 1):
+        d_from = max(f"{year}0101", START)
+        d_to = min(f"{year}1231", now.strftime("%Y%m%d"))
+        got, page = 0, 1
+        while page <= 50:
+            items, total, code = _get("getSubsidenceList01", {"sagoDateFrom": d_from, "sagoDateTo": d_to,
+                                                              "numOfRows": PAGE_ROWS, "pageNo": page})
+            codes.append(code)
+            rows += items
+            got += len(items)
+            if not items or (total is not None and got >= total) or len(items) < PAGE_ROWS:
+                break
+            page += 1
+    if not rows:
+        raise RuntimeError(f"목록 응답 없음 (resultCode={','.join(sorted(set(c for c in codes if c))) or '-'})")
     seoul = [r for r in rows if "서울" in str(r.get("siDo", ""))]
 
     loc = Locator()
