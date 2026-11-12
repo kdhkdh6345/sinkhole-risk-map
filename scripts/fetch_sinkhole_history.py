@@ -30,7 +30,7 @@ OUT = ROOT / "web" / "data" / "snapshot_sinkhole_history.json"
 DONG_GEO = ROOT / "web" / "data" / "seoul_dong.geojson"
 GU_GEO = ROOT / "data" / "raw" / "seoul_gu.geojson"
 GRID = ROOT / "web" / "data" / "grid.json"
-BASE = "http://apis.data.go.kr/1611000/undergroundsafetyinfo01"
+BASE = "https://apis.data.go.kr/1613000/undergroundsafetyinfo01"  # 공공데이터포털 End Point (기관코드 1613000)
 KST = timezone(timedelta(hours=9))
 START = "20180101"   # 지하안전법 시행(2018.1) 이후 자료
 REFRESH_HOURS = 24
@@ -66,7 +66,7 @@ def _get(op: str, params: dict) -> tuple[list[dict], int | None, str]:
     body = r.content.decode("utf-8", errors="replace")
     if r.status_code != 200:
         # 오류 원인을 로그에서 바로 볼 수 있도록 응답 본문 앞부분을 함께 남긴다 (키는 남기지 않음).
-        raise RuntimeError(f"HTTP {r.status_code} ({op}, {params}) 응답: {body[:200]!r}")
+        raise RuntimeError(f"HTTP {r.status_code} 응답={body[:300]!r} ({op}, {params})")
     return parse_items(body)
 
 
@@ -228,7 +228,7 @@ def fetch(force: bool = False) -> str:
     try:
         data, msg = build(now, prev)
     except Exception as e:
-        return f"수집 실패 ({type(e).__name__}: {str(e)[:120]}) — 기존 파일 유지"
+        return f"수집 실패 ({type(e).__name__}: {str(e)[:500]}) — 기존 파일 유지"
     if not data["events"]:
         return f"서울 사고 0건 — 기존 파일 유지 ({msg})"
     OUT.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
