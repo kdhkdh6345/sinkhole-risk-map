@@ -44,10 +44,11 @@ jobs:
         KMA_API_KEY: ${{ secrets.KMA_API_KEY }}
         SEOUL_API_KEY: ${{ secrets.SEOUL_API_KEY }}
         GW_API_KEY: ${{ secrets.GW_API_KEY }}
+        JIS_API_KEY: ${{ secrets.JIS_API_KEY }}
+        
       run: |
         # Fetch real-time news
         python scripts/crawl_news.py
-        python scripts/fetch_sinkhole_history.py || true
         
         # Generate base data first
         python scripts/build_grid.py
