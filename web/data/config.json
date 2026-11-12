@@ -143,9 +143,9 @@
     }
   },
   "decay": {
-    "plateau_hours": 0,
-    "tail_hours": 96,
-    "residual_at_tail": 0.01
+    "plateau_hours": 24,
+    "tail_hours": 72,
+    "residual_at_tail": 0.05
   },
   "stages": {
     "stage1": {
