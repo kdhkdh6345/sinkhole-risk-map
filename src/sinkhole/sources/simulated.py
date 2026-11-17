@@ -24,6 +24,26 @@ _HEAVY_RAIN_DISTRICTS = {"영등포구", "도봉구", "구로구", "성동구"}
 _EXTREME_DISTRICTS = {"종로구", "용산구", "성북구", "중구", "마포구"}
 _HISTORICAL_2022_DISTRICTS = {"동작구", "서초구", "강남구", "영등포구", "구로구", "관악구"}
 
+# 2022.8.8 실제 강수 집중 지점 (위도, 경도, 영향 반경 km).
+# 기상청 신대방 AWS(410, 동작구) 1시간 141.5mm, 강남역·대치 일대 침수.
+# 구 전체에 같은 비를 주는 대신 이 두 지점에서 멀어질수록 강수가 줄어드는 형태로 재현한다.
+_HISTORICAL_2022_CORES = [
+    (37.4877, 126.9135, 3.5),   # 동작구 신대방동 (신대방 AWS)
+    (37.4979, 127.0276, 3.5),   # 강남구·서초구 강남역 일대
+]
+_HISTORICAL_2022_PEAK = (141.5, 259.0, 381.5)   # 1h, 3h, 12h (mm)
+_HISTORICAL_2022_BG = (8.0, 20.0, 35.0)         # 강수 중심에서 먼 서울 북부·동부
+
+
+def _core_weight(lat: np.ndarray, lon: np.ndarray, cores) -> np.ndarray:
+    """격자별 강수 중심 영향도(0~1). 가장 가까운 중심 기준 가우시안 감소."""
+    w = np.zeros(len(lat), dtype=np.float64)
+    for clat, clon, radius_km in cores:
+        dy = (lat - clat) * 111.0
+        dx = (lon - clon) * 88.4   # 위도 37.5°에서 경도 1° ≈ 88.4km
+        w = np.maximum(w, np.exp(-(dx * dx + dy * dy) / (2.0 * radius_km ** 2)))
+    return w
+
 # 교통 부하 높은 자치구 (정적 프록시 — 도로 등급·버스노선 밀도 기반)
 _HIGH_TRAFFIC_DISTRICTS = {
     "강남구", "서초구", "송파구", "영등포구", "마포구",
@@ -88,12 +108,11 @@ class SimulatedRainAdapter(RainSourceAdapter):
                     rain[i] = [max(0.0, np.random.normal(30, 8)), max(0.0, np.random.normal(62, 12)), max(0.0, np.random.normal(115, 20))]
                     
         elif self._scenario == "historical_flood_2022":
-            # 2022년 8월 8일 동작구 신대방 관측소(410) 및 강남 일대 강수량 기준
-            for i, gu in enumerate(grid_df["gu"]):
-                if gu in _HISTORICAL_2022_DISTRICTS:
-                    rain[i] = [max(0.0, np.random.normal(141.5, 15)), max(0.0, np.random.normal(259.0, 25)), max(0.0, np.random.normal(381.5, 40))]
-                else:
-                    rain[i] = [max(0.0, np.random.normal(50.0, 10)), max(0.0, np.random.normal(100.0, 15)), max(0.0, np.random.normal(150.0, 25))]
+            # 2022년 8월 8일: 신대방(동작구)·강남역 두 지점에 집중, 멀어질수록 감소
+            w = _core_weight(grid_df["lat"].to_numpy(), grid_df["lon"].to_numpy(), _HISTORICAL_2022_CORES)
+            for k in range(3):
+                base = _HISTORICAL_2022_BG[k] + (_HISTORICAL_2022_PEAK[k] - _HISTORICAL_2022_BG[k]) * w
+                rain[:, k] = np.maximum(0.0, base * np.random.normal(1.0, 0.08, n))
 
         return rain
 
@@ -142,12 +161,9 @@ class SimulatedGroundwaterAdapter(GroundwaterSourceAdapter):
                     sigma[i] = np.random.normal(-1.0, 0.3)
                     
         elif self._scenario == "historical_flood_2022":
-            # 토립자 유실로 인한 수위 폭락 (3σ 이상)
-            for i, gu in enumerate(grid_df["gu"]):
-                if gu in _HISTORICAL_2022_DISTRICTS:
-                    sigma[i] = np.random.normal(-3.5, 0.5)
-                else:
-                    sigma[i] = np.random.normal(-1.0, 0.4)
+            # 강수 집중 지점 주변에서 수위 급락 (중심 -3.5σ → 먼 곳 -0.3σ)
+            w = _core_weight(grid_df["lat"].to_numpy(), grid_df["lon"].to_numpy(), _HISTORICAL_2022_CORES)
+            sigma = -0.3 + (-3.5 + 0.3) * w + np.random.normal(0, 0.3, n)
 
         return sigma
 
