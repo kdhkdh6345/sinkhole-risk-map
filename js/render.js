@@ -30,6 +30,8 @@ let playTimer = null, simElapsedH = 0;
 let autoRefreshTimer = null;
 let lastGeneratedAt = '';
 let currentScenario = 'calm';
+let RAIN_CORES = [];   // 지도에 표시할 강수 중심 [{lat, lon, km}]
+let SCENARIO_BASE_TEXT = '';
 let historyMode = 'off'; // 'off' | 'points' | 'dong'
 
 // [r, g, b, a] 형식
@@ -356,6 +358,22 @@ function updateDeckGLLayer() {
     }
   }
 
+  // ── 강수 중심 표시 (시나리오 모드) ──
+  if (currentScenario !== 'calm' && RAIN_CORES.length) {
+    layers.push(new ScatterplotLayer({
+      id: 'rain-core-layer',
+      data: RAIN_CORES,
+      getPosition: d => [d.lon, d.lat],
+      getRadius: d => d.km * 1000 * 1.5,
+      stroked: true,
+      filled: true,
+      getFillColor: [88, 166, 255, 28],
+      getLineColor: [88, 166, 255, 220],
+      lineWidthMinPixels: 2,
+      pickable: false
+    }));
+  }
+
   DECK.setProps({ layers: layers });
 
 }
@@ -554,9 +572,14 @@ async function onScenarioChange(e) {
     } else if (scenario === 'extreme') {
       expTextEl.innerHTML = '극한호우 및 지하수위 급락이 동시에 발생한 상황을 가정한 시뮬레이션입니다. <b>시간 진행(재생)에 따른 감쇠 과정</b>을 보여줍니다.';
     } else if (scenario === 'historical_flood_2022') {
-      expTextEl.innerHTML = '2022년 8월 8일 동작구 및 강남 일대에 내린 기록적인 폭우 상황을 재현한 시뮬레이션입니다. <b>시간 진행(재생)에 따른 감쇠 과정</b>을 보여줍니다.';
+      expTextEl.innerHTML = '2022년 8월 8일 <b>동작구 신대방(1시간 141.5mm)·강남역 일대</b>에 집중된 폭우를 재현했습니다(파란 원 = 강수 중심). <b>빨간색(Stage 3)은 비가 가장 많이 온 곳이 아니라, 많은 비·지하수위 급락·노후 하수관(B≥10)이 모두 겹친 곳</b>입니다. 시간 진행(재생)에 따른 감쇠 과정도 볼 수 있습니다.';
     }
   }
+
+  SCENARIO_BASE_TEXT = expTextEl ? expTextEl.innerHTML : '';
+  // 2022년은 실제 사건이므로 강수 중심이 고정(신대방·강남역). 나머지는 초기화 때 새로 생성.
+  RAIN_CORES = scenario === 'historical_flood_2022' ? HISTORICAL_2022_CORES.slice()
+             : (scenario in STORM_PARAMS ? STORM_PARAMS[scenario].refCores : []);
 
   try {
     setLoading(`${scenario} 시나리오 로드 중…`);
@@ -606,6 +629,8 @@ function applySnapshot(snapData) {
 function startAutoRefresh() {
   autoRefreshTimer = setInterval(async () => {
     if (playTimer) return;
+    // 시나리오 모드에서는 자동 갱신하지 않는다 (초기화로 만든 강우 패턴이 시연 중에 덮어써지지 않도록)
+    if (currentScenario !== 'calm') return;
 
     try {
       const url = `data/snapshot_${currentScenario}.json?t=${Date.now()}`;
@@ -683,15 +708,104 @@ function simReset() {
   document.getElementById('btn-play').textContent = '▶ 재생';
   document.getElementById('btn-play').classList.remove('active');
   
-  // 초기화: 스냅샷 원래 값으로 되돌린다 (무작위 노이즈 없음 → 매번 같은 결과)
-  for (const idStr of Object.keys(SIM_CELLS)) {
-    const id = +idStr;
-    const orig = ORIGINAL_RAW_CELLS[id];
-    if (!orig) continue;
-    SIM_CELLS[id] = { b: orig.b, r_raw: orig.r, g_raw: orig.g, t_raw: orig.t, gs_raw: orig.gs };
+  if (currentScenario in STORM_PARAMS) {
+    // 호우경보·극한호우: 초기화할 때마다 강수 중심을 새로 정해 강우 패턴을 다시 만든다.
+    const areas = generateStorm(currentScenario);
+    const expTextEl = document.getElementById('sim-exp-text');
+    if (expTextEl) {
+      expTextEl.innerHTML = SCENARIO_BASE_TEXT +
+        `<br><b style="color:#58a6ff">새 강우 패턴: ${areas.join('·')} 일대</b> (파란 원 = 강수 중심, 초기화할 때마다 무작위로 다시 생성)`;
+    }
+  } else {
+    // 실시간 모드·2022년(실제 사건): 스냅샷 원래 값으로 되돌린다.
+    for (const idStr of Object.keys(SIM_CELLS)) {
+      const id = +idStr;
+      const orig = ORIGINAL_RAW_CELLS[id];
+      if (!orig) continue;
+      SIM_CELLS[id] = { b: orig.b, r_raw: orig.r, g_raw: orig.g, t_raw: orig.t, gs_raw: orig.gs };
+    }
   }
-  
+
   applySimDecay(0);
+}
+
+// ── 무작위 강우 패턴 생성 (호우경보·극한호우) ──────────────────────────────
+// Python 시나리오(simulated.py)와 같은 강수량·지하수위 수준을 쓰되, 강수 중심 위치만 매번 무작위로 정한다.
+// 점수 계산은 Python과 일치 검증된 SinkholeEngine(computeR·computeG·베이지안 결합·단계 판정)을 그대로 쓴다.
+const HISTORICAL_2022_CORES = [
+  { lat: 37.4877, lon: 126.9135, km: 3.5 },   // 동작구 신대방동 (신대방 AWS)
+  { lat: 37.4979, lon: 127.0276, km: 3.5 },   // 강남역 일대
+];
+const STORM_PARAMS = {
+  heavy_rain: {   // 호우경보: 중심 3h 92mm → R 20, 주변 3h 42mm → R 10
+    cores: [1, 2], km: 4.0,
+    peak: [20, 92, 110], bg: [10, 42, 50], sigPeak: -2.6, sigBg: -0.5,
+    refCores: [],
+  },
+  extreme: {      // 극한호우: 중심 1h 75mm → R 25, 주변 1h 30mm·3h 62mm → R 15
+    cores: [2, 3], km: 3.5,
+    peak: [75, 95, 185], bg: [30, 62, 115], sigPeak: -3.2, sigBg: -1.0,
+    refCores: [],
+  },
+};
+
+function _gauss() {   // 표준정규 난수 (Box–Muller)
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+function _coreWeight(lat, lon, cores) {
+  let w = 0;
+  for (const c of cores) {
+    const dy = (lat - c.lat) * 111.0, dx = (lon - c.lon) * 88.4;
+    w = Math.max(w, Math.exp(-(dx * dx + dy * dy) / (2 * c.km * c.km)));
+  }
+  return w;
+}
+
+function generateStorm(scenario) {
+  const P = STORM_PARAMS[scenario];
+  const ids = Object.keys(SIM_CELLS).map(Number).filter(id => GRID_CELLS[id]);
+  const bMin = WEIGHTS_CFG.stages.stage1.b_min;
+  const nCores = P.cores[0] + Math.floor(Math.random() * (P.cores[1] - P.cores[0] + 1));
+
+  // 강수 중심을 서울 전역에서 무작위로 뽑는다. 다만 시연에서 아무 변화도 안 보이는 패턴을 피하려고,
+  // 강수 중심 반경 안에 지반 취약 격자(B ≥ b_min)가 일정 수 이상 들어오는 패턴만 채택한다.
+  let cores = [];
+  for (let tries = 0; tries < 200; tries++) {
+    cores = [];
+    for (let k = 0; k < nCores; k++) {
+      const gc = GRID_CELLS[ids[Math.floor(Math.random() * ids.length)]];
+      cores.push({ lat: gc.lat, lon: gc.lon, km: P.km * (0.85 + Math.random() * 0.3) });
+    }
+    const vulnerableHit = ids.filter(id => ORIGINAL_RAW_CELLS[id].b >= bMin &&
+      _coreWeight(GRID_CELLS[id].lat, GRID_CELLS[id].lon, cores) > 0.6).length;
+    if (vulnerableHit >= 25) break;
+  }
+
+  for (const id of ids) {
+    const gc = GRID_CELLS[id], orig = ORIGINAL_RAW_CELLS[id];
+    const w = _coreWeight(gc.lat, gc.lon, cores);
+    const mm = [0, 1, 2].map(k => Math.max(0, (P.bg[k] + (P.peak[k] - P.bg[k]) * w) * (1 + 0.1 * _gauss())));
+    const sigma = P.sigBg + (P.sigPeak - P.sigBg) * w + 0.3 * _gauss();
+    const r = SinkholeEngine.computeR(mm[0], mm[1], mm[2], WEIGHTS_CFG);
+    const g = SinkholeEngine.computeG(sigma, r, WEIGHTS_CFG);
+    SIM_CELLS[id] = { b: orig.b, r_raw: r, g_raw: g, t_raw: orig.t, gs_raw: sigma };
+  }
+
+  RAIN_CORES = cores;
+  // 강수 중심이 속한 자치구 이름 (가장 가까운 격자 기준)
+  const names = cores.map(c => {
+    let best = null, bd = Infinity;
+    for (const id of ids) {
+      const g = GRID_CELLS[id], d = (g.lat - c.lat) ** 2 + (g.lon - c.lon) ** 2;
+      if (d < bd) { bd = d; best = g.gu; }
+    }
+    return best;
+  });
+  return [...new Set(names)];
 }
 
 // ── UI 업데이트 ──────────────────────────────────────────────────────────
