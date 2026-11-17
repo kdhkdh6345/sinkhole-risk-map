@@ -454,7 +454,8 @@ function getTooltipContent({object, layer}) {
     return { html: `<div style="padding: 10px; background: rgba(0,0,0,0.85); color: white; border-radius: 4px;">🚇 <b>${p.name}</b>${p.ref ? ` (${p.ref})` : ''}<div style="opacity:.6;font-size:11px;margin-top:4px">© OpenStreetMap contributors</div></div>` };
   }
   if (layer && layer.id === 'ai-anomaly-layer') {
-    const { id, gu, score, gs } = object;
+    const { id, score, gs } = object;
+    const gu = cellPlace(id);   // 스냅샷 셀에는 자치구 이름이 없어서 격자 정보에서 찾는다
     const thr = ((WEIGHTS_CFG || {}).anomaly || {}).sigma_threshold ?? 2.5;
     const sigma = (gs ?? 0);
     return {
@@ -854,6 +855,35 @@ function generateStorm(scenario) {
   return [...new Set(names)];
 }
 
+// ── 격자 → "자치구 행정동" 이름 (이상탐지 툴팁·재난문자용) ─────────────────
+const _placeCache = {};
+function _inRing(lon, lat, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+function cellPlace(id) {
+  if (id in _placeCache) return _placeCache[id];
+  const g = GRID_CELLS[id];
+  if (!g) return null;
+  let place = g.gu || null;
+  if (DONG_GEOJSON) {
+    for (const f of DONG_GEOJSON.features) {
+      const geom = f.geometry;
+      const polys = geom.type === 'Polygon' ? [geom.coordinates] : geom.coordinates;
+      if (polys.some(poly => _inRing(g.lon, g.lat, poly[0]))) {
+        const parts = String(f.properties.adm_nm || '').split(' ');
+        place = parts.slice(-2).join(' ');   // "서울특별시 강동구 명일1동" → "강동구 명일1동"
+        break;
+      }
+    }
+  }
+  return (_placeCache[id] = place);
+}
+
 // ── UI 업데이트 ──────────────────────────────────────────────────────────
 
 function updateHeader(meta, cellsById) {
@@ -992,7 +1022,8 @@ function handleGridClick(info) {
     selectedGridInfo = { type: 'dong', name: dongName, grade: history.grade, count: history.count };
     document.getElementById('llm-target-info').innerHTML = `📍 <b>${dongName}</b> (과거 ${history.count}건 발생)`;
   } else if (info.layer.id === 'ai-anomaly-layer') {
-    const { id, gu, score, stage } = info.object;
+    const { id, score, stage } = info.object;
+    const gu = cellPlace(id);
     selectedGridInfo = { type: 'ai', id, gu, score, stage };
     document.getElementById('llm-target-info').innerHTML = `📍 <b>${gu || '특정 지역'}</b> (AI 예측 이상탐지 발생!)`;
   } else if (info.layer.id === 'history-layer') {

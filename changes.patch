@@ -348,7 +348,7 @@ index 6cdfc2b..6238b19 100644
              return fh.parse_items(REAL_LIST) if params["sagoDateFrom"].startswith("2025") else ([], 0, "0")
          return [{"sagoNo": "20250050", "sigungu": "강동구", "dong": "명일동", "sinkDepth": "20", "deathCnt": "1"}], 1, "0"
 diff --git a/web/index.html b/web/index.html
-index 2159db8..6f3cb24 100644
+index 2159db8..dbaf506 100644
 --- a/web/index.html
 +++ b/web/index.html
 @@ -314,6 +314,7 @@
@@ -364,12 +364,12 @@ index 2159db8..6f3cb24 100644
  <script src="js/sim.js?v=12"></script>
  <!-- 지도 렌더링 -->
 -<script src="js/render.js?v=20"></script>
-+<script src="js/render.js?v=21"></script>
++<script src="js/render.js?v=22"></script>
  
  </body>
  </html>
 diff --git a/web/js/render.js b/web/js/render.js
-index a932791..fccb082 100644
+index a932791..301e7dd 100644
 --- a/web/js/render.js
 +++ b/web/js/render.js
 @@ -30,7 +30,8 @@ let playTimer = null, simElapsedH = 0;
@@ -408,7 +408,17 @@ index a932791..fccb082 100644
    // ── 강수 중심 표시 (시나리오 모드) ──
    if (currentScenario !== 'calm' && RAIN_CORES.length) {
      layers.push(new ScatterplotLayer({
-@@ -457,6 +477,14 @@ function getTooltipContent({object, layer}) {
+@@ -434,7 +454,8 @@ function getTooltipContent({object, layer}) {
+     return { html: `<div style="padding: 10px; background: rgba(0,0,0,0.85); color: white; border-radius: 4px;">🚇 <b>${p.name}</b>${p.ref ? ` (${p.ref})` : ''}<div style="opacity:.6;font-size:11px;margin-top:4px">© OpenStreetMap contributors</div></div>` };
+   }
+   if (layer && layer.id === 'ai-anomaly-layer') {
+-    const { id, gu, score, gs } = object;
++    const { id, score, gs } = object;
++    const gu = cellPlace(id);   // 스냅샷 셀에는 자치구 이름이 없어서 격자 정보에서 찾는다
+     const thr = ((WEIGHTS_CFG || {}).anomaly || {}).sigma_threshold ?? 2.5;
+     const sigma = (gs ?? 0);
+     return {
+@@ -457,6 +478,14 @@ function getTooltipContent({object, layer}) {
        `
      };
    }
@@ -423,7 +433,7 @@ index a932791..fccb082 100644
    if (layer && layer.id === 'complaints-layer') {
      return { html: `<div style="padding: 10px; background: rgba(0,0,0,0.8); color: white; border-radius: 4px;">⚠️ 민원 접수: ${object.type}<br>긴급도: ${object.urgency}단계</div>` };
    }
-@@ -622,6 +650,7 @@ function applySnapshot(snapData) {
+@@ -622,6 +651,7 @@ function applySnapshot(snapData) {
      source_detail: snapData.source_detail || {},
      sewer: snapData.sewer || null
    };
@@ -431,7 +441,43 @@ index a932791..fccb082 100644
    lastGeneratedAt = snapData.generated_at;
  
    for (const c of snapData.cells) {
-@@ -841,9 +870,44 @@ function updateHeader(meta, cellsById) {
+@@ -825,6 +855,35 @@ function generateStorm(scenario) {
+   return [...new Set(names)];
+ }
+ 
++// ── 격자 → "자치구 행정동" 이름 (이상탐지 툴팁·재난문자용) ─────────────────
++const _placeCache = {};
++function _inRing(lon, lat, ring) {
++  let inside = false;
++  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
++    const [xi, yi] = ring[i], [xj, yj] = ring[j];
++    if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) inside = !inside;
++  }
++  return inside;
++}
++function cellPlace(id) {
++  if (id in _placeCache) return _placeCache[id];
++  const g = GRID_CELLS[id];
++  if (!g) return null;
++  let place = g.gu || null;
++  if (DONG_GEOJSON) {
++    for (const f of DONG_GEOJSON.features) {
++      const geom = f.geometry;
++      const polys = geom.type === 'Polygon' ? [geom.coordinates] : geom.coordinates;
++      if (polys.some(poly => _inRing(g.lon, g.lat, poly[0]))) {
++        const parts = String(f.properties.adm_nm || '').split(' ');
++        place = parts.slice(-2).join(' ');   // "서울특별시 강동구 명일1동" → "강동구 명일1동"
++        break;
++      }
++    }
++  }
++  return (_placeCache[id] = place);
++}
++
+ // ── UI 업데이트 ──────────────────────────────────────────────────────────
+ 
+ function updateHeader(meta, cellsById) {
+@@ -841,9 +900,44 @@ function updateHeader(meta, cellsById) {
    const label = meta.mode === 'real' ? (anyLive ? '실시간' : '샘플 데이터') : '시뮬레이션';
    modeEl.textContent = label;
    modeEl.style.color = label === '실시간' ? '#2ea043' : '#58a6ff';
@@ -476,3 +522,13 @@ index a932791..fccb082 100644
  function updateCounters(cellsById) {
    let s1 = 0, s2 = 0, s3 = 0;
    for (const c of Object.values(cellsById)) {
+@@ -928,7 +1022,8 @@ function handleGridClick(info) {
+     selectedGridInfo = { type: 'dong', name: dongName, grade: history.grade, count: history.count };
+     document.getElementById('llm-target-info').innerHTML = `📍 <b>${dongName}</b> (과거 ${history.count}건 발생)`;
+   } else if (info.layer.id === 'ai-anomaly-layer') {
+-    const { id, gu, score, stage } = info.object;
++    const { id, score, stage } = info.object;
++    const gu = cellPlace(id);
+     selectedGridInfo = { type: 'ai', id, gu, score, stage };
+     document.getElementById('llm-target-info').innerHTML = `📍 <b>${gu || '특정 지역'}</b> (AI 예측 이상탐지 발생!)`;
+   } else if (info.layer.id === 'history-layer') {
