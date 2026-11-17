@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime, timedelta, timezone
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 try:
     import requests
@@ -118,8 +118,8 @@ def main() -> int:
     if jis:
         today = datetime.now(tz=KST)
         probe("국토교통부 지하안전정보 — 지반침하사고 리스트 (최근 1년, 3건)",
-              "http://apis.data.go.kr/1611000/undergroundsafetyinfo01/getSubsidenceList01",
-              {"serviceKey": jis, "_type": "json", "type": "json", "numOfRows": 3, "pageNo": 1,
+              "https://apis.data.go.kr/1613000/undergroundsafetyinfo01/getSubsidenceList01",
+              {"serviceKey": unquote(jis.strip()), "_type": "json", "type": "json", "numOfRows": 3, "pageNo": 1,
                "sagoDateFrom": (today - timedelta(days=365)).strftime("%Y%m%d"), "sagoDateTo": today.strftime("%Y%m%d")},
               n=1200)
 

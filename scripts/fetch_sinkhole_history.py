@@ -27,6 +27,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "web" / "data" / "snapshot_sinkhole_history.json"
+STATUS = ROOT / "web" / "data" / "snapshot_sinkhole_history_status.json"  # 마지막 시도 결과 (실패 원인 확인용)
 DONG_GEO = ROOT / "web" / "data" / "seoul_dong.geojson"
 GU_GEO = ROOT / "data" / "raw" / "seoul_gu.geojson"
 GRID = ROOT / "web" / "data" / "grid.json"
@@ -34,6 +35,7 @@ BASE = "https://apis.data.go.kr/1613000/undergroundsafetyinfo01"  # 공공데이
 KST = timezone(timedelta(hours=9))
 START = "20180101"   # 지하안전법 시행(2018.1) 이후 자료
 REFRESH_HOURS = 24
+RETRY_MINUTES = 60   # 실패하면 5분마다 재시도하지 않고 1시간 뒤에 다시 시도 (일일 호출 한도 보호)
 PAGE_ROWS = 100      # 한 페이지 건수 (너무 크면 400 오류)
 
 
@@ -51,11 +53,18 @@ def parse_items(text: str) -> tuple[list[dict], int | None, str]:
         if isinstance(items, dict):
             items = [items]
         total = body.get("totalCount")
-        return list(items or []), (int(total) if total not in (None, "") else None), str(header.get("resultCode", ""))
+        code = str(header.get("resultCode", "") or resp.get("resultCode", ""))
+        msg = str(header.get("resultMsg", "") or resp.get("resultMsg", ""))
+        if code not in ("", "0", "00") and msg:
+            code = f"{code} {msg}"
+        return list(items or []), (int(total) if total not in (None, "") else None), code
     root = ET.fromstring(text)
     items = [{c.tag: (c.text or "").strip() for c in it} for it in root.iter("item")]
     total = root.findtext(".//totalCount")
     code = root.findtext(".//resultCode") or root.findtext(".//returnReasonCode") or ""
+    msg = root.findtext(".//resultMsg") or root.findtext(".//returnAuthMsg") or root.findtext(".//errMsg") or ""
+    if code not in ("", "0", "00") and msg:
+        code = f"{code} {msg}"
     return items, (int(total) if total and total.isdigit() else None), code
 
 
@@ -139,45 +148,61 @@ def grade_of(ev: dict) -> int:
 def build(now: datetime, prev: dict) -> tuple[dict, str]:
     known = {e["sagoNo"]: e for e in prev.get("events", [])}
     # 한 번에 긴 기간·많은 건수를 요청하면 400 Bad Request가 나므로, 1년 단위로 100건씩 나눠 받는다.
-    rows, codes = [], []
+    rows, codes, year_errors = [], [], []
     for year in range(int(START[:4]), now.year + 1):
         d_from = max(f"{year}0101", START)
         d_to = min(f"{year}1231", now.strftime("%Y%m%d"))
         got, page = 0, 1
-        while page <= 50:
-            items, total, code = _get("getSubsidenceList01", {"sagoDateFrom": d_from, "sagoDateTo": d_to,
-                                                              "numOfRows": PAGE_ROWS, "pageNo": page})
-            codes.append(code)
-            rows += items
-            got += len(items)
-            if not items or (total is not None and got >= total) or len(items) < PAGE_ROWS:
-                break
-            page += 1
+        try:
+            while page <= 50:
+                items, total, code = _get("getSubsidenceList01", {"sagoDateFrom": d_from, "sagoDateTo": d_to,
+                                                                  "numOfRows": PAGE_ROWS, "pageNo": page})
+                codes.append(code)
+                rows += items
+                got += len(items)
+                if not items or (total is not None and got >= total) or len(items) < PAGE_ROWS:
+                    break
+                page += 1
+        except Exception as e:  # 한 해가 실패해도 나머지 해는 계속 받는다
+            year_errors.append(f"{year}: {type(e).__name__} {str(e)[:150]}")
     if not rows:
-        raise RuntimeError(f"목록 응답 없음 (resultCode={','.join(sorted(set(c for c in codes if c))) or '-'})")
+        codes_txt = ",".join(sorted(set(c for c in codes if c))) or "-"
+        raise RuntimeError(f"목록 응답 없음 (resultCode={codes_txt}; 오류={year_errors[:2]})")
+    uniq = {}
+    for r in rows:  # 같은 사고가 두 번 오면(페이지 경계 등) 한 번만 센다
+        uniq.setdefault(str(r.get("sagoNo")), r)
+    rows = list(uniq.values())
     seoul = [r for r in rows if "서울" in str(r.get("siDo", ""))]
 
     loc = Locator()
-    events, new = [], 0
+    events, new, detail_fail = [], 0, []
     for r in seoul:
         no = str(r.get("sagoNo"))
         ev = known.get(no)
+        if ev is not None and not ev.get("detail_ok"):
+            ev = None  # 지난번에 상세조회가 실패한 사고는 다시 조회한다 (동 정보를 채우기 위해)
         if ev is None:
-            info = {}
+            info, detail_ok = {}, False
             try:
-                items, _, _ = _get("getSubsidenceInfo01", {"sagoNo": no, "numOfRows": 10, "pageNo": 1})
+                items, _, code = _get("getSubsidenceInfo01", {"sagoNo": no, "numOfRows": 10, "pageNo": 1})
                 info = items[0] if items else {}
-            except Exception:
-                pass
+                detail_ok = bool(info)
+                if not info:
+                    detail_fail.append(code or "빈 응답")
+            except Exception as e:
+                detail_fail.append(type(e).__name__)
             gu = str(info.get("siGunGu") or r.get("siGunGu") or "").strip()
-            dong = str(info.get("dong") or "").strip()
+            dong = str(info.get("dong") or r.get("dong") or "").strip()
+            if not dong:  # 동 칸이 비어 있으면 주소에서 '○○동'을 찾아 쓴다
+                m = re.search(r"([가-힣0-9·]+동)(?:\s|$|\d)", str(info.get("addr") or r.get("addr") or ""))
+                dong = m.group(1) if m else ""
             ev = {
                 "sagoNo": no, "date": str(info.get("sagoDate") or r.get("sagoDate") or ""),
                 "gu": gu, "dong": dong, "addr": str(info.get("addr") or ""),
                 "cause": str(info.get("sagoDetail") or r.get("sagoDetail") or ""),
                 "width_m": _num(info.get("sinkWidth")), "extend_m": _num(info.get("sinkExtend")),
                 "depth_m": _num(info.get("sinkDepth")), "death": int(_num(info.get("deathCnt"))),
-                "ground": str(info.get("grdKind") or ""),
+                "ground": str(info.get("grdKind") or ""), "detail_ok": detail_ok,
             }
             new += 1
         try:
@@ -207,10 +232,15 @@ def build(now: datetime, prev: dict) -> tuple[dict, str]:
     data = {"meta": {"source": "국토교통부 지하안전정보(JIS), 공공데이터포털 '국토교통부_지하안전정보'",
                      "fetched_at": now.isoformat(timespec="seconds"), "period": f"{START}~{now:%Y%m%d}",
                      "total_national": len(rows), "seoul": len(events),
-                     "dong_level": sum(e["loc_level"] == "동" for e in events)},
+                     "dong_level": sum(e["loc_level"] == "동" for e in events),
+                     "detail_failed": len(detail_fail), "year_errors": year_errors},
             "events": events, "by_grid": by_grid, "by_dong": by_dong}
     msg = (f"전국 {len(rows)}건 중 서울 {len(events)}건 (동 단위 {data['meta']['dong_level']}건, "
-           f"새 상세조회 {new}건), 격자 {len(by_grid)}개")
+           f"새 상세조회 {new}건, 상세조회 실패 {len(detail_fail)}건), 격자 {len(by_grid)}개, 동 {len(by_dong)}곳")
+    if detail_fail:
+        msg += f" / 상세조회 실패 원인 예: {sorted(set(detail_fail))[:3]}"
+    if year_errors:
+        msg += f" / 목록 실패 연도: {year_errors[:3]}"
     return data, msg
 
 
@@ -229,12 +259,24 @@ def fetch(force: bool = False) -> str:
     except Exception:
         pass
     try:
+        st = json.loads(STATUS.read_text(encoding="utf-8"))
+        last_try = datetime.fromisoformat(st["tried_at"])
+        if not force and not st.get("ok") and now - last_try < timedelta(minutes=RETRY_MINUTES):
+            return f"직전 실패 후 {RETRY_MINUTES}분 대기 중 ({last_try:%H:%M} 실패: {st.get('message', '')[:200]})"
+    except Exception:
+        pass
+    try:
         data, msg = build(now, prev)
+        ok = bool(data["events"])
+        if not ok:
+            msg = f"서울 사고 0건 — 기존 파일 유지 ({msg})"
     except Exception as e:
-        return f"수집 실패 ({type(e).__name__}: {str(e)[:500]}) — 기존 파일 유지"
-    if not data["events"]:
-        return f"서울 사고 0건 — 기존 파일 유지 ({msg})"
-    OUT.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        data, ok = None, False
+        msg = f"수집 실패 ({type(e).__name__}: {str(e)[:500]}) — 기존 파일 유지"
+    STATUS.write_text(json.dumps({"tried_at": now.isoformat(timespec="seconds"), "ok": ok, "message": msg},
+                                 ensure_ascii=False, indent=1), encoding="utf-8")
+    if ok:
+        OUT.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     return msg
 
 

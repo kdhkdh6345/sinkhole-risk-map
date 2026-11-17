@@ -158,10 +158,14 @@ def main() -> int:
             sys.path.insert(0, str(Path(__file__).resolve().parent))
             from fetch_subway_osm import fetch as fetch_subway
             print(f"  🚇 subway: {fetch_subway()}")
+        except Exception as e:
+            print(f"  ⚠️  subway: 건너뜀 ({type(e).__name__}: {str(e)[:200]})")
+        try:  # 과거 사고 이력 (국토교통부 지하안전정보). 지하철과 따로 실행해 한쪽 실패가 다른 쪽을 막지 않게 한다.
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
             from fetch_sinkhole_history import fetch as fetch_history
             print(f"  🕳️ history: {fetch_history()}")
         except Exception as e:
-            print(f"  ⚠️  subway: 건너뜀 ({type(e).__name__})")
+            print(f"  ⚠️  history: 건너뜀 ({type(e).__name__}: {str(e)[:200]})")
         from sinkhole.sources.sewer_live import SeoulSewerLevelSource
         sewer_src = SeoulSewerLevelSource()
         sewer = sewer_src.fetch()
