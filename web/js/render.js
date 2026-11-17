@@ -472,7 +472,8 @@ function getTooltipContent({object, layer}) {
             <b>[선정 기준]</b><br>
             • 지하수위 σ 이상도: <b>${sigma.toFixed(2)}σ</b><br>
             • 판정 기준: |σ| &gt; ${thr} (weights.yaml anomaly.sigma_threshold)<br>
-            <span style="color: #ff7b72; display: inline-block; margin-top: 4px;">평상시 변동 범위를 크게 벗어난 지하수위 변화가 관측(또는 시뮬레이션)되었습니다. 현장 확인이 필요합니다.</span>
+            <span style="color: #ff7b72; display: inline-block; margin-top: 4px;">평상시 변동 범위를 크게 벗어난 지하수위 변화가 관측(또는 시뮬레이션)되었습니다. 현장 확인이 필요합니다.</span><br>
+            <span style="color: #8b949e; display: inline-block; margin-top: 4px;">※ 이상탐지는 종합 위험도와 별도로 작동하는 조기 경보입니다. 비가 적으면 지하수위 점수(G)가 0이라 종합 위험도는 낮게 나올 수 있습니다.</span>
           </div>
         </div>
       `

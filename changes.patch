@@ -348,7 +348,7 @@ index 6cdfc2b..6238b19 100644
              return fh.parse_items(REAL_LIST) if params["sagoDateFrom"].startswith("2025") else ([], 0, "0")
          return [{"sagoNo": "20250050", "sigungu": "강동구", "dong": "명일동", "sinkDepth": "20", "deathCnt": "1"}], 1, "0"
 diff --git a/web/index.html b/web/index.html
-index 2159db8..dbaf506 100644
+index 2159db8..b740cfe 100644
 --- a/web/index.html
 +++ b/web/index.html
 @@ -314,6 +314,7 @@
@@ -364,12 +364,12 @@ index 2159db8..dbaf506 100644
  <script src="js/sim.js?v=12"></script>
  <!-- 지도 렌더링 -->
 -<script src="js/render.js?v=20"></script>
-+<script src="js/render.js?v=22"></script>
++<script src="js/render.js?v=23"></script>
  
  </body>
  </html>
 diff --git a/web/js/render.js b/web/js/render.js
-index a932791..301e7dd 100644
+index a932791..5445be9 100644
 --- a/web/js/render.js
 +++ b/web/js/render.js
 @@ -30,7 +30,8 @@ let playTimer = null, simElapsedH = 0;
@@ -418,7 +418,15 @@ index a932791..301e7dd 100644
      const thr = ((WEIGHTS_CFG || {}).anomaly || {}).sigma_threshold ?? 2.5;
      const sigma = (gs ?? 0);
      return {
-@@ -457,6 +478,14 @@ function getTooltipContent({object, layer}) {
+@@ -451,12 +472,21 @@ function getTooltipContent({object, layer}) {
+             <b>[선정 기준]</b><br>
+             • 지하수위 σ 이상도: <b>${sigma.toFixed(2)}σ</b><br>
+             • 판정 기준: |σ| &gt; ${thr} (weights.yaml anomaly.sigma_threshold)<br>
+-            <span style="color: #ff7b72; display: inline-block; margin-top: 4px;">평상시 변동 범위를 크게 벗어난 지하수위 변화가 관측(또는 시뮬레이션)되었습니다. 현장 확인이 필요합니다.</span>
++            <span style="color: #ff7b72; display: inline-block; margin-top: 4px;">평상시 변동 범위를 크게 벗어난 지하수위 변화가 관측(또는 시뮬레이션)되었습니다. 현장 확인이 필요합니다.</span><br>
++            <span style="color: #8b949e; display: inline-block; margin-top: 4px;">※ 이상탐지는 종합 위험도와 별도로 작동하는 조기 경보입니다. 비가 적으면 지하수위 점수(G)가 0이라 종합 위험도는 낮게 나올 수 있습니다.</span>
+           </div>
+         </div>
        `
      };
    }
@@ -433,7 +441,7 @@ index a932791..301e7dd 100644
    if (layer && layer.id === 'complaints-layer') {
      return { html: `<div style="padding: 10px; background: rgba(0,0,0,0.8); color: white; border-radius: 4px;">⚠️ 민원 접수: ${object.type}<br>긴급도: ${object.urgency}단계</div>` };
    }
-@@ -622,6 +651,7 @@ function applySnapshot(snapData) {
+@@ -622,6 +652,7 @@ function applySnapshot(snapData) {
      source_detail: snapData.source_detail || {},
      sewer: snapData.sewer || null
    };
@@ -441,7 +449,7 @@ index a932791..301e7dd 100644
    lastGeneratedAt = snapData.generated_at;
  
    for (const c of snapData.cells) {
-@@ -825,6 +855,35 @@ function generateStorm(scenario) {
+@@ -825,6 +856,35 @@ function generateStorm(scenario) {
    return [...new Set(names)];
  }
  
@@ -477,7 +485,7 @@ index a932791..301e7dd 100644
  // ── UI 업데이트 ──────────────────────────────────────────────────────────
  
  function updateHeader(meta, cellsById) {
-@@ -841,9 +900,44 @@ function updateHeader(meta, cellsById) {
+@@ -841,9 +901,44 @@ function updateHeader(meta, cellsById) {
    const label = meta.mode === 'real' ? (anyLive ? '실시간' : '샘플 데이터') : '시뮬레이션';
    modeEl.textContent = label;
    modeEl.style.color = label === '실시간' ? '#2ea043' : '#58a6ff';
@@ -522,7 +530,7 @@ index a932791..301e7dd 100644
  function updateCounters(cellsById) {
    let s1 = 0, s2 = 0, s3 = 0;
    for (const c of Object.values(cellsById)) {
-@@ -928,7 +1022,8 @@ function handleGridClick(info) {
+@@ -928,7 +1023,8 @@ function handleGridClick(info) {
      selectedGridInfo = { type: 'dong', name: dongName, grade: history.grade, count: history.count };
      document.getElementById('llm-target-info').innerHTML = `📍 <b>${dongName}</b> (과거 ${history.count}건 발생)`;
    } else if (info.layer.id === 'ai-anomaly-layer') {
