@@ -52,7 +52,7 @@ def parse_items(text: str) -> tuple[list[dict], int | None, str]:
         items = items.get("item", []) if isinstance(items, dict) else items
         if isinstance(items, dict):
             items = [items]
-        total = body.get("totalCount")
+        total = body.get("totalCount", resp.get("totalCount"))
         code = str(header.get("resultCode", "") or resp.get("resultCode", ""))
         msg = str(header.get("resultMsg", "") or resp.get("resultMsg", ""))
         if code not in ("", "0", "00") and msg:
@@ -74,12 +74,44 @@ def _get(op: str, params: dict) -> tuple[list[dict], int | None, str]:
     # Encoding 키(%2B, %3D 포함)를 넣어도 두 번 인코딩되지 않도록 먼저 풀어 둔다. Decoding 키는 그대로다.
     key = unquote(os.getenv("JIS_API_KEY", "").strip())
     p = {"serviceKey": key, "_type": "json", "type": "json", **params}
-    r = requests.get(f"{BASE}/{op}", params=p, timeout=30)
+    for attempt in range(3):  # 공공데이터포털이 가끔 늦게 응답한다 → 최대 3번, 60초까지 기다림
+        try:
+            r = requests.get(f"{BASE}/{op}", params=p, timeout=60)
+            break
+        except requests.exceptions.Timeout:
+            if attempt == 2:
+                raise
     body = r.content.decode("utf-8", errors="replace")
     if r.status_code != 200:
         # 오류 원인을 로그에서 바로 볼 수 있도록 응답 본문 앞부분을 함께 남긴다 (키는 남기지 않음).
         raise RuntimeError(f"HTTP {r.status_code} 응답={body[:300]!r} ({op}, {params})")
     return parse_items(body)
+
+
+# ── 항목 이름: 활용가이드와 실제 응답이 다르다 (가이드 siDo/siGunGu/sagoDetail ↔ 실제 sido/sigungu/sagoReason).
+#    대소문자를 무시하고 여러 이름 중 값이 있는 것을 쓴다.
+ALIASES = {
+    "sido": ("sido", "siDo", "sidoNm"),
+    "sigungu": ("sigungu", "siGunGu", "sggNm", "signgu"),
+    "dong": ("dong", "dongNm", "emd", "emdNm", "umd"),
+    "addr": ("addr", "address", "sagoAddr", "roadAddr"),
+    "cause": ("sagoReason", "sagoDetail", "reason", "sagoCause"),
+    "date": ("sagoDate", "sagoDt"),
+    "width": ("sinkWidth", "width"),
+    "extend": ("sinkExtend", "extend", "sinkLength"),
+    "depth": ("sinkDepth", "depth"),
+    "death": ("deathCnt", "death"),
+    "ground": ("grdKind", "groundKind"),
+}
+
+
+def f(item: dict, key: str) -> str:
+    low = {str(k).lower(): v for k, v in (item or {}).items()}
+    for name in ALIASES[key]:
+        v = low.get(name.lower())
+        if v not in (None, ""):
+            return str(v).strip()
+    return ""
 
 
 # ── 위치: 행정동 이름 매칭 ────────────────────────────────────────────────
@@ -172,7 +204,7 @@ def build(now: datetime, prev: dict) -> tuple[dict, str]:
     for r in rows:  # 같은 사고가 두 번 오면(페이지 경계 등) 한 번만 센다
         uniq.setdefault(str(r.get("sagoNo")), r)
     rows = list(uniq.values())
-    seoul = [r for r in rows if "서울" in str(r.get("siDo", ""))]
+    seoul = [r for r in rows if "서울" in f(r, "sido")]
 
     loc = Locator()
     events, new, detail_fail = [], 0, []
@@ -191,18 +223,19 @@ def build(now: datetime, prev: dict) -> tuple[dict, str]:
                     detail_fail.append(code or "빈 응답")
             except Exception as e:
                 detail_fail.append(type(e).__name__)
-            gu = str(info.get("siGunGu") or r.get("siGunGu") or "").strip()
-            dong = str(info.get("dong") or r.get("dong") or "").strip()
+            gu = f(info, "sigungu") or f(r, "sigungu")
+            gu = gu.split()[-1] if gu else ""  # '서울특별시 강남구' 형태도 대응
+            dong = f(info, "dong") or f(r, "dong")
             if not dong:  # 동 칸이 비어 있으면 주소에서 '○○동'을 찾아 쓴다
-                m = re.search(r"([가-힣0-9·]+동)(?:\s|$|\d)", str(info.get("addr") or r.get("addr") or ""))
+                m = re.search(r"([가-힣0-9·]+동)(?:\s|$|\d)", f(info, "addr") or f(r, "addr"))
                 dong = m.group(1) if m else ""
             ev = {
-                "sagoNo": no, "date": str(info.get("sagoDate") or r.get("sagoDate") or ""),
-                "gu": gu, "dong": dong, "addr": str(info.get("addr") or ""),
-                "cause": str(info.get("sagoDetail") or r.get("sagoDetail") or ""),
-                "width_m": _num(info.get("sinkWidth")), "extend_m": _num(info.get("sinkExtend")),
-                "depth_m": _num(info.get("sinkDepth")), "death": int(_num(info.get("deathCnt"))),
-                "ground": str(info.get("grdKind") or ""), "detail_ok": detail_ok,
+                "sagoNo": no, "date": f(info, "date") or f(r, "date"),
+                "gu": gu, "dong": dong, "addr": f(info, "addr") or f(r, "addr"),
+                "cause": f(info, "cause") or f(r, "cause"),
+                "width_m": _num(f(info, "width")), "extend_m": _num(f(info, "extend")),
+                "depth_m": _num(f(info, "depth")), "death": int(_num(f(info, "death"))),
+                "ground": f(info, "ground"), "detail_ok": detail_ok,
             }
             new += 1
         try:

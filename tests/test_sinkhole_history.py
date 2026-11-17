@@ -47,3 +47,30 @@ def test_build_seoul_only_and_located():
     g = data["by_grid"][str(ev["20240001"]["cell"])]
     assert g["date"] == "2024-08-29" and "하수관" in g["cause"]
     assert "서울 2건" in msg
+
+
+# 실제 응답 형식 (2026-11 확인): 항목 이름이 소문자(sido·sigungu·sagoReason), totalCount가 body 밖에 있음
+REAL_LIST = json.dumps({"response": {"header": {"resultCode": "0", "resultMsg": "NORMAL_CODE"}, "numOfRows": "3",
+    "pageNo": "1", "totalCount": "2", "body": {"items": [
+        {"sagoNo": "20250050", "sido": "서울특별시", "sigungu": "강동구", "sagoReason": "", "sagoDate": "20250324", "no": "1"},
+        {"sagoNo": "20250183", "sido": "충청남도", "sigungu": "아산시", "sagoReason": "", "sagoDate": "20251117", "no": "2"},
+    ]}}})
+
+
+def test_real_response_field_names():
+    items, total, code = fh.parse_items(REAL_LIST)
+    assert total == 2 and code == "0" and len(items) == 2
+
+    def fake_get(op, params):
+        if op == "getSubsidenceList01":
+            return fh.parse_items(REAL_LIST) if params["sagoDateFrom"].startswith("2025") else ([], 0, "0")
+        return [{"sagoNo": "20250050", "sigungu": "강동구", "dong": "명일동", "sinkDepth": "20", "deathCnt": "1"}], 1, "0"
+    orig = fh._get
+    fh._get = fake_get
+    try:
+        data, msg = fh.build(datetime(2026, 11, 17, tzinfo=fh.KST), {})
+    finally:
+        fh._get = orig
+    assert [e["sagoNo"] for e in data["events"]] == ["20250050"]
+    assert data["events"][0]["loc_level"] == "동" and data["events"][0]["grade"] == 3
+    assert sum(v["count"] for v in data["by_dong"].values()) == 1
