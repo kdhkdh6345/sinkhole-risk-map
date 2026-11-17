@@ -29,7 +29,7 @@ def test_parse_json_and_xml():
 
 
 def test_build_seoul_only_and_located():
-    def fake_get(op, params):
+    def fake_get(op, params, **kw):
         if op == "getSubsidenceList01":
             return fh.parse_items(LIST_JSON)
         return [INFO[params["sagoNo"]]], 1, "00"
@@ -61,7 +61,7 @@ def test_real_response_field_names():
     items, total, code = fh.parse_items(REAL_LIST)
     assert total == 2 and code == "0" and len(items) == 2
 
-    def fake_get(op, params):
+    def fake_get(op, params, **kw):
         if op == "getSubsidenceList01":
             return fh.parse_items(REAL_LIST) if params["sagoDateFrom"].startswith("2025") else ([], 0, "0")
         return [{"sagoNo": "20250050", "sigungu": "강동구", "dong": "명일동", "sinkDepth": "20", "deathCnt": "1"}], 1, "0"

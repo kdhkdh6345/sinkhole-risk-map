@@ -30,7 +30,8 @@ let playTimer = null, simElapsedH = 0;
 let autoRefreshTimer = null;
 let lastGeneratedAt = '';
 let currentScenario = 'calm';
-let RAIN_CORES = [];   // 지도에 표시할 강수 중심 [{lat, lon, km}]
+let RAIN_CORES = [];
+let RAIN_OBS = null;   // 실시간 관측소별 강수량 (snapshot.rain_obs)   // 지도에 표시할 강수 중심 [{lat, lon, km}]
 let SCENARIO_BASE_TEXT = '';
 let historyMode = 'off'; // 'off' | 'points' | 'dong'
 
@@ -359,6 +360,25 @@ function updateDeckGLLayer() {
     }
   }
 
+  // ── 실시간 강수 관측 표시: 비가 오는 관측소에 파란 원 (위험 점수 반영 기준보다 적은 비도 보이게) ──
+  if (currentScenario === 'calm') {
+    const wet = rainWetStations();
+    if (wet.length) {
+      layers.push(new ScatterplotLayer({
+        id: 'rain-obs-layer',
+        data: wet,
+        getPosition: d => [d.lon, d.lat],
+        getRadius: d => 1200 + Math.min(20, Math.max(d.r1 || 0, (d.r15 || 0) * 4)) * 150,
+        radiusUnits: 'meters',
+        stroked: true, filled: true,
+        getFillColor: [56, 139, 253, 70],
+        getLineColor: [121, 192, 255, 230],
+        lineWidthMinPixels: 2,
+        pickable: true
+      }));
+    }
+  }
+
   // ── 강수 중심 표시 (시나리오 모드) ──
   if (currentScenario !== 'calm' && RAIN_CORES.length) {
     layers.push(new ScatterplotLayer({
@@ -456,6 +476,14 @@ function getTooltipContent({object, layer}) {
         </div>
       `
     };
+  }
+  if (layer && layer.id === 'rain-obs-layer') {
+    const v = x => (x == null ? '-' : x + 'mm');
+    return { html: `<div style="padding:10px;background:rgba(13,17,23,.92);color:#fff;border-radius:6px;border:1px solid #388bfd;font-size:12px;line-height:1.6">
+      <b>🌧 ${object.gu ? object.gu + ' · ' : ''}${object.name}</b><br>
+      최근 15분 ${v(object.r15)} · 1시간 ${v(object.r1)} · 3시간 ${v(object.r3)}<br>
+      12시간 ${v(object.r12)}${object.rday != null ? ' · 오늘 누적 ' + object.rday + 'mm' : ''}<br>
+      <span style="color:#8b949e">위험 점수(R)는 1시간 20mm 또는 3시간 40mm 이상부터 반영</span></div>` };
   }
   if (layer && layer.id === 'complaints-layer') {
     return { html: `<div style="padding: 10px; background: rgba(0,0,0,0.8); color: white; border-radius: 4px;">⚠️ 민원 접수: ${object.type}<br>긴급도: ${object.urgency}단계</div>` };
@@ -622,6 +650,7 @@ function applySnapshot(snapData) {
     source_detail: snapData.source_detail || {},
     sewer: snapData.sewer || null
   };
+  RAIN_OBS = snapData.rain_obs || null;
   lastGeneratedAt = snapData.generated_at;
 
   for (const c of snapData.cells) {
@@ -841,7 +870,42 @@ function updateHeader(meta, cellsById) {
   const label = meta.mode === 'real' ? (anyLive ? '실시간' : '샘플 데이터') : '시뮬레이션';
   modeEl.textContent = label;
   modeEl.style.color = label === '실시간' ? '#2ea043' : '#58a6ff';
+  updateRainBadge();
   updateCounters(cellsById);
+}
+
+// 비가 오는 관측소 목록 (최근 15분 또는 1시간 강수량 > 0). 가장 가까운 격자의 자치구 이름을 붙인다.
+function rainWetStations() {
+  if (!RAIN_OBS || !RAIN_OBS.stations) return [];
+  const wet = RAIN_OBS.stations.filter(s => (s.r15 || 0) > 0 || (s.r1 || 0) > 0);
+  for (const s of wet) {
+    if (s.gu) continue;
+    let best = null, bd = Infinity;
+    for (const g of Object.values(GRID_CELLS)) {
+      const d = (g.lat - s.lat) ** 2 + (g.lon - s.lon) ** 2;
+      if (d < bd) { bd = d; best = g.gu; }
+    }
+    s.gu = bd < 0.01 ? best : null;
+  }
+  return wet;
+}
+
+function updateRainBadge() {
+  const el = document.getElementById('rain-badge');
+  if (!el) return;
+  if (currentScenario !== 'calm' || !RAIN_OBS) { el.style.display = 'none'; return; }
+  const wet = rainWetStations();
+  el.style.display = 'inline';
+  if (!wet.length) {
+    el.textContent = '☀ 서울 강수 없음';
+    el.style.background = 'var(--bg-card2)'; el.style.color = '#8b949e'; el.style.border = '1px solid var(--border)';
+    el.title = `관측소 ${RAIN_OBS.stations.length}곳 기준`;
+    return;
+  }
+  const top = wet.reduce((a, b) => ((b.r1 || 0) > (a.r1 || 0) ? b : a));
+  el.textContent = `🌧 비 오는 중 · ${wet.length}곳 · 최대 1시간 ${top.r1 ?? 0}mm${top.gu ? ' (' + top.gu + ')' : ''}`;
+  el.style.background = 'rgba(56,139,253,.18)'; el.style.color = '#79c0ff'; el.style.border = '1px solid #388bfd';
+  el.title = '지도의 파란 원 = 비가 오는 관측소. 위험 점수(R)는 1시간 20mm 또는 3시간 40mm 이상부터 반영됩니다.';
 }
 
 function updateCounters(cellsById) {

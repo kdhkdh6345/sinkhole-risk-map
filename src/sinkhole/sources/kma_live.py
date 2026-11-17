@@ -102,6 +102,9 @@ class KmaLiveRainSource(RainSourceAdapter):
         self.max_dist_deg = max_dist_deg
         self.timeout = timeout
         self.detail = ""
+        # 관측소별 실제 강수량 (지도에 '비 오는 중' 표시용). [{name, lat, lon, r15, r1, r3, r12, rday}]
+        self.stations: list[dict] = []
+        self.obs_time: str | None = None
 
     # ── HTTP ────────────────────────────────────────────────────────────
     def _get(self, url: str, params: dict) -> str:
@@ -127,16 +130,20 @@ class KmaLiveRainSource(RainSourceAdapter):
         i_stn = idx.get("STN", 1)
         i_60 = idx.get("RN60M", idx.get("RN60"))
         i_12 = idx.get("RN12H", idx.get("RN12"))
+        i_15 = idx.get("RN15M", idx.get("RN15"))
+        i_day = idx.get("RNDAY")
         if i_60 is None:
             raise RuntimeError(f"AWS 응답에서 RN-60m 컬럼을 찾지 못함 (헤더: {cols})")
         out = []
         for r in rows:
-            if len(r) <= max(i_stn, i_60, i_12 or 0):
+            if len(r) <= max(i_stn, i_60, i_12 or 0, i_15 or 0, i_day or 0):
                 continue
             out.append({
                 "STN": r[i_stn],
                 "RN60": _num(r[i_60]),
                 "RN12H": _num(r[i_12]) if i_12 is not None else np.nan,
+                "RN15": _num(r[i_15]) if i_15 is not None else np.nan,
+                "RNDAY": _num(r[i_day]) if i_day is not None else np.nan,
             })
         return pd.DataFrame(out)
 
@@ -170,6 +177,17 @@ class KmaLiveRainSource(RainSourceAdapter):
             raise RuntimeError("서울 주변 AWS 관측값 0개")
         result = self._project(grid_df, st[["LAT", "LON"]].to_numpy(), st[["R1", "R3", "R12"]].to_numpy())
         self.detail = f"AWS 매분자료 {tm:%Y-%m-%d %H:%M} KST, 서울 주변 관측소 {len(st)}곳"
+        rnd = lambda v: None if pd.isna(v) else round(float(v), 1)
+        self.stations = [
+            {"name": f"AWS {row.STN}", "lat": round(float(row.LAT), 5), "lon": round(float(row.LON), 5),
+             "r15": rnd(row.RN15), "r1": rnd(row.R1), "r3": rnd(row.R3), "r12": rnd(row.R12), "rday": rnd(row.RNDAY)}
+            for row in st.itertuples()
+        ]
+        self.obs_time = tm.isoformat(timespec="minutes")
+        raining = [s for s in self.stations if (s["r15"] or 0) > 0 or (s["r1"] or 0) > 0]
+        if raining:
+            top = max(raining, key=lambda s: s["r1"] or 0)
+            self.detail += f", 비 오는 관측소 {len(raining)}곳 (최대 1시간 {top['r1']}mm)"
         return result
 
     # ── 2) ASOS 서울(108) 시간자료 ───────────────────────────────────────
@@ -185,6 +203,9 @@ class KmaLiveRainSource(RainSourceAdapter):
         rn = np.nan_to_num(np.array(rn, dtype=np.float64), nan=0.0)  # ASOS는 무강수 시 결측 표기
         r1, r3, r12 = rn[-1], rn[-3:].sum(), rn[-12:].sum()
         self.detail = f"ASOS 서울(108) 시간자료 ~{end:%Y-%m-%d %H}시 KST (단일 지점)"
+        self.stations = [{"name": "ASOS 서울(108)", "lat": 37.5714, "lon": 126.9658, "r15": None,
+                          "r1": round(float(r1), 1), "r3": round(float(r3), 1), "r12": round(float(r12), 1), "rday": None}]
+        self.obs_time = end.isoformat(timespec="minutes")
         return np.tile([r1, r3, r12], (len(grid_df), 1)).astype(np.float64)
 
     # ── 투영 ─────────────────────────────────────────────────────────────

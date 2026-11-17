@@ -35,6 +35,10 @@ BASE = "https://apis.data.go.kr/1613000/undergroundsafetyinfo01"  # 공공데이
 KST = timezone(timedelta(hours=9))
 START = "20180101"   # 지하안전법 시행(2018.1) 이후 자료
 REFRESH_HOURS = 24
+PARTIAL_REFRESH_MIN = 30   # 상세조회가 덜 끝났으면 30분 뒤 이어서 받는다
+LIST_BUDGET_SEC = 120      # 목록 수집에 쓰는 최대 시간
+DETAIL_BUDGET_SEC = 150    # 한 번 실행에서 상세조회에 쓰는 최대 시간 (남은 건 다음 실행에서 이어서)
+DETAIL_WORKERS = 6         # 상세조회 동시 요청 수
 RETRY_MINUTES = 60   # 실패하면 5분마다 재시도하지 않고 1시간 뒤에 다시 시도 (일일 호출 한도 보호)
 PAGE_ROWS = 100      # 한 페이지 건수 (너무 크면 400 오류)
 
@@ -68,18 +72,18 @@ def parse_items(text: str) -> tuple[list[dict], int | None, str]:
     return items, (int(total) if total and total.isdigit() else None), code
 
 
-def _get(op: str, params: dict) -> tuple[list[dict], int | None, str]:
+def _get(op: str, params: dict, timeout: float = 60, tries: int = 3) -> tuple[list[dict], int | None, str]:
     import requests
     from urllib.parse import unquote
     # Encoding 키(%2B, %3D 포함)를 넣어도 두 번 인코딩되지 않도록 먼저 풀어 둔다. Decoding 키는 그대로다.
     key = unquote(os.getenv("JIS_API_KEY", "").strip())
     p = {"serviceKey": key, "_type": "json", "type": "json", **params}
-    for attempt in range(3):  # 공공데이터포털이 가끔 늦게 응답한다 → 최대 3번, 60초까지 기다림
+    for attempt in range(tries):  # 공공데이터포털이 가끔 늦게 응답한다 → 다시 시도
         try:
-            r = requests.get(f"{BASE}/{op}", params=p, timeout=60)
+            r = requests.get(f"{BASE}/{op}", params=p, timeout=timeout)
             break
         except requests.exceptions.Timeout:
-            if attempt == 2:
+            if attempt == tries - 1:
                 raise
     body = r.content.decode("utf-8", errors="replace")
     if r.status_code != 200:
@@ -180,15 +184,22 @@ def grade_of(ev: dict) -> int:
 def build(now: datetime, prev: dict) -> tuple[dict, str]:
     known = {e["sagoNo"]: e for e in prev.get("events", [])}
     # 한 번에 긴 기간·많은 건수를 요청하면 400 Bad Request가 나므로, 1년 단위로 100건씩 나눠 받는다.
+    import time
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    t0 = time.monotonic()
     rows, codes, year_errors = [], [], []
     for year in range(int(START[:4]), now.year + 1):
+        if time.monotonic() - t0 > LIST_BUDGET_SEC:
+            year_errors.append(f"{year}: 시간 초과로 건너뜀")
+            continue
         d_from = max(f"{year}0101", START)
         d_to = min(f"{year}1231", now.strftime("%Y%m%d"))
         got, page = 0, 1
         try:
             while page <= 50:
                 items, total, code = _get("getSubsidenceList01", {"sagoDateFrom": d_from, "sagoDateTo": d_to,
-                                                                  "numOfRows": PAGE_ROWS, "pageNo": page})
+                                                                  "numOfRows": PAGE_ROWS, "pageNo": page},
+                                          timeout=30, tries=2)
                 codes.append(code)
                 rows += items
                 got += len(items)
@@ -208,21 +219,40 @@ def build(now: datetime, prev: dict) -> tuple[dict, str]:
 
     loc = Locator()
     events, new, detail_fail = [], 0, []
+
+    # 상세조회(동·주소·규모)가 필요한 사고만 골라 여러 개를 동시에 요청한다.
+    # 정해진 시간(DETAIL_BUDGET_SEC)이 지나면 멈추고, 못 받은 사고는 다음 실행에서 이어서 받는다.
+    need = [str(r.get("sagoNo")) for r in seoul
+            if not (known.get(str(r.get("sagoNo"))) or {}).get("detail_ok")]
+    details: dict[str, dict] = {}
+    t1 = time.monotonic()
+
+    def _detail(no: str):
+        if time.monotonic() - t1 > DETAIL_BUDGET_SEC:
+            return no, None, "시간 초과(다음 실행에서 이어서)"
+        try:
+            items, _, code = _get("getSubsidenceInfo01", {"sagoNo": no, "numOfRows": 10, "pageNo": 1},
+                                  timeout=20, tries=1)
+            return no, (items[0] if items else None), (code or "빈 응답")
+        except Exception as e:
+            return no, None, type(e).__name__
+
+    with ThreadPoolExecutor(max_workers=DETAIL_WORKERS) as ex:
+        for fut in as_completed([ex.submit(_detail, no) for no in need]):
+            no, info, why = fut.result()
+            if info:
+                details[no] = info
+            else:
+                detail_fail.append(why)
+
     for r in seoul:
         no = str(r.get("sagoNo"))
         ev = known.get(no)
         if ev is not None and not ev.get("detail_ok"):
-            ev = None  # 지난번에 상세조회가 실패한 사고는 다시 조회한다 (동 정보를 채우기 위해)
+            ev = None  # 지난번에 상세조회가 안 된 사고는 이번에 받은 상세정보로 다시 만든다
         if ev is None:
-            info, detail_ok = {}, False
-            try:
-                items, _, code = _get("getSubsidenceInfo01", {"sagoNo": no, "numOfRows": 10, "pageNo": 1})
-                info = items[0] if items else {}
-                detail_ok = bool(info)
-                if not info:
-                    detail_fail.append(code or "빈 응답")
-            except Exception as e:
-                detail_fail.append(type(e).__name__)
+            info = details.get(no) or {}
+            detail_ok = bool(info)
             gu = f(info, "sigungu") or f(r, "sigungu")
             gu = gu.split()[-1] if gu else ""  # '서울특별시 강남구' 형태도 대응
             dong = f(info, "dong") or f(r, "dong")
@@ -266,7 +296,8 @@ def build(now: datetime, prev: dict) -> tuple[dict, str]:
                      "fetched_at": now.isoformat(timespec="seconds"), "period": f"{START}~{now:%Y%m%d}",
                      "total_national": len(rows), "seoul": len(events),
                      "dong_level": sum(e["loc_level"] == "동" for e in events),
-                     "detail_failed": len(detail_fail), "year_errors": year_errors},
+                     "detail_failed": len(detail_fail), "detail_pending": len(detail_fail),
+                     "year_errors": year_errors},
             "events": events, "by_grid": by_grid, "by_dong": by_dong}
     msg = (f"전국 {len(rows)}건 중 서울 {len(events)}건 (동 단위 {data['meta']['dong_level']}건, "
            f"새 상세조회 {new}건, 상세조회 실패 {len(detail_fail)}건), 격자 {len(by_grid)}개, 동 {len(by_dong)}곳")
@@ -287,7 +318,8 @@ def fetch(force: bool = False) -> str:
         prev = {}
     try:
         last = datetime.fromisoformat(prev["meta"]["fetched_at"])
-        if not force and now - last < timedelta(hours=REFRESH_HOURS):
+        wait = timedelta(minutes=PARTIAL_REFRESH_MIN) if prev["meta"].get("detail_pending") else timedelta(hours=REFRESH_HOURS)
+        if not force and now - last < wait:
             return f"최근 수집본 사용 ({last:%m-%d %H:%M}, 서울 {prev['meta']['seoul']}건)"
     except Exception:
         pass

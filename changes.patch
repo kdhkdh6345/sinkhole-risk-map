@@ -1,0 +1,478 @@
+diff --git a/scripts/crawl_news.py b/scripts/crawl_news.py
+index 8913228..9c68567 100644
+--- a/scripts/crawl_news.py
++++ b/scripts/crawl_news.py
+@@ -1,57 +1,71 @@
+ import json
++import urllib.parse
+ import urllib.request
+ import urllib.error
+ import xml.etree.ElementTree as ET
+ from datetime import datetime
++from email.utils import parsedate_to_datetime
++
++DAYS = 30          # 최근 며칠 이내 기사를 찾을지 (7일이면 기사가 없는 날이 많아 30일로 넓힘)
++MAX_ITEMS = 5
+ 
+ FALLBACK_NEWS = [
+     {
+         "title": "[안내] 현재 실시간으로 보고된 주요 지반침하 뉴스가 없습니다.",
+         "link": "#",
+-        "description": "최근 7일간 '싱크홀' 관련 주요 보도가 없습니다. 안전한 상태입니다.",
++        "description": f"최근 {DAYS}일간 '싱크홀' 관련 주요 보도가 없습니다.",
+         "type": "weather"
+     }
+ ]
+ 
++
+ def crawl_google_news_rss():
+-    url = "https://news.google.com/rss/search?q=%EC%8B%B1%ED%81%AC%ED%99%80+when:7d&hl=ko&gl=KR&ceid=KR:ko"
+-    
++    # 검색어: 싱크홀 OR 땅꺼짐 OR 지반침하, 최근 DAYS일
++    q = urllib.parse.quote(f"싱크홀 OR 땅꺼짐 OR 지반침하 when:{DAYS}d")
++    url = f"https://news.google.com/rss/search?q={q}&hl=ko&gl=KR&ceid=KR:ko"
++
+     try:
+         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+-        with urllib.request.urlopen(req, timeout=5) as response:
+-            xml_data = response.read()
+-            root = ET.fromstring(xml_data)
+-            parsed_items = []
+-            
+-            for item in root.findall('.//item')[:5]:
+-                title = item.find('title').text if item.find('title') is not None else ""
+-                link = item.find('link').text if item.find('link') is not None else "#"
+-                
+-                desc = "관련 뉴스 기사입니다. 클릭하여 원문을 확인하세요."
+-                
+-                parsed_items.append({
+-                    "title": title,
+-                    "link": link,
+-                    "description": desc,
+-                    "type": "news"
+-                })
+-            
+-            if parsed_items:
+-                return parsed_items
++        with urllib.request.urlopen(req, timeout=10) as response:
++            root = ET.fromstring(response.read())
++        parsed = []
++        for item in root.findall('.//item'):
++            title = item.findtext('title') or ""
++            link = item.findtext('link') or "#"
++            source = item.findtext('source') or ""
++            try:
++                pub = parsedate_to_datetime(item.findtext('pubDate'))
++            except Exception:
++                pub = None
++            date_txt = pub.astimezone().strftime('%Y-%m-%d') if pub else ""
++            desc = " · ".join(x for x in (source, date_txt) if x) or "관련 뉴스 기사입니다."
++            parsed.append((pub.timestamp() if pub else 0, {
++                "title": title,
++                "link": link,
++                "description": desc + " — 클릭하여 원문을 확인하세요.",
++                "date": date_txt,
++                "type": "news"
++            }))
++        parsed.sort(key=lambda x: -x[0])          # 최신 기사부터
++        items = [p for _, p in parsed[:MAX_ITEMS]]
++        if items:
++            return items
+     except Exception as e:
+         print(f"Crawler failed ({e}), using fallback data.")
+-        
++
+     return FALLBACK_NEWS
+ 
++
+ def main():
+-    print("Starting news crawler (Google News RSS)...")
++    print(f"Starting news crawler (Google News RSS, 최근 {DAYS}일)...")
+     news_data = crawl_google_news_rss()
+-    
++
+     out_path = 'web/data/news_issues.json'
+     with open(out_path, 'w', encoding='utf-8') as f:
+         json.dump({"issues": news_data, "updated_at": datetime.now().isoformat()}, f, ensure_ascii=False, indent=2)
+-    
++
+     print(f"Saved {len(news_data)} news items to {out_path}.")
+ 
++
+ if __name__ == '__main__':
+     main()
+diff --git a/scripts/fetch_sinkhole_history.py b/scripts/fetch_sinkhole_history.py
+index 6c3a3e9..f743aff 100644
+--- a/scripts/fetch_sinkhole_history.py
++++ b/scripts/fetch_sinkhole_history.py
+@@ -35,6 +35,10 @@ BASE = "https://apis.data.go.kr/1613000/undergroundsafetyinfo01"  # 공공데이
+ KST = timezone(timedelta(hours=9))
+ START = "20180101"   # 지하안전법 시행(2018.1) 이후 자료
+ REFRESH_HOURS = 24
++PARTIAL_REFRESH_MIN = 30   # 상세조회가 덜 끝났으면 30분 뒤 이어서 받는다
++LIST_BUDGET_SEC = 120      # 목록 수집에 쓰는 최대 시간
++DETAIL_BUDGET_SEC = 150    # 한 번 실행에서 상세조회에 쓰는 최대 시간 (남은 건 다음 실행에서 이어서)
++DETAIL_WORKERS = 6         # 상세조회 동시 요청 수
+ RETRY_MINUTES = 60   # 실패하면 5분마다 재시도하지 않고 1시간 뒤에 다시 시도 (일일 호출 한도 보호)
+ PAGE_ROWS = 100      # 한 페이지 건수 (너무 크면 400 오류)
+ 
+@@ -68,18 +72,18 @@ def parse_items(text: str) -> tuple[list[dict], int | None, str]:
+     return items, (int(total) if total and total.isdigit() else None), code
+ 
+ 
+-def _get(op: str, params: dict) -> tuple[list[dict], int | None, str]:
++def _get(op: str, params: dict, timeout: float = 60, tries: int = 3) -> tuple[list[dict], int | None, str]:
+     import requests
+     from urllib.parse import unquote
+     # Encoding 키(%2B, %3D 포함)를 넣어도 두 번 인코딩되지 않도록 먼저 풀어 둔다. Decoding 키는 그대로다.
+     key = unquote(os.getenv("JIS_API_KEY", "").strip())
+     p = {"serviceKey": key, "_type": "json", "type": "json", **params}
+-    for attempt in range(3):  # 공공데이터포털이 가끔 늦게 응답한다 → 최대 3번, 60초까지 기다림
++    for attempt in range(tries):  # 공공데이터포털이 가끔 늦게 응답한다 → 다시 시도
+         try:
+-            r = requests.get(f"{BASE}/{op}", params=p, timeout=60)
++            r = requests.get(f"{BASE}/{op}", params=p, timeout=timeout)
+             break
+         except requests.exceptions.Timeout:
+-            if attempt == 2:
++            if attempt == tries - 1:
+                 raise
+     body = r.content.decode("utf-8", errors="replace")
+     if r.status_code != 200:
+@@ -180,15 +184,22 @@ def grade_of(ev: dict) -> int:
+ def build(now: datetime, prev: dict) -> tuple[dict, str]:
+     known = {e["sagoNo"]: e for e in prev.get("events", [])}
+     # 한 번에 긴 기간·많은 건수를 요청하면 400 Bad Request가 나므로, 1년 단위로 100건씩 나눠 받는다.
++    import time
++    from concurrent.futures import ThreadPoolExecutor, as_completed
++    t0 = time.monotonic()
+     rows, codes, year_errors = [], [], []
+     for year in range(int(START[:4]), now.year + 1):
++        if time.monotonic() - t0 > LIST_BUDGET_SEC:
++            year_errors.append(f"{year}: 시간 초과로 건너뜀")
++            continue
+         d_from = max(f"{year}0101", START)
+         d_to = min(f"{year}1231", now.strftime("%Y%m%d"))
+         got, page = 0, 1
+         try:
+             while page <= 50:
+                 items, total, code = _get("getSubsidenceList01", {"sagoDateFrom": d_from, "sagoDateTo": d_to,
+-                                                                  "numOfRows": PAGE_ROWS, "pageNo": page})
++                                                                  "numOfRows": PAGE_ROWS, "pageNo": page},
++                                          timeout=30, tries=2)
+                 codes.append(code)
+                 rows += items
+                 got += len(items)
+@@ -208,21 +219,40 @@ def build(now: datetime, prev: dict) -> tuple[dict, str]:
+ 
+     loc = Locator()
+     events, new, detail_fail = [], 0, []
++
++    # 상세조회(동·주소·규모)가 필요한 사고만 골라 여러 개를 동시에 요청한다.
++    # 정해진 시간(DETAIL_BUDGET_SEC)이 지나면 멈추고, 못 받은 사고는 다음 실행에서 이어서 받는다.
++    need = [str(r.get("sagoNo")) for r in seoul
++            if not (known.get(str(r.get("sagoNo"))) or {}).get("detail_ok")]
++    details: dict[str, dict] = {}
++    t1 = time.monotonic()
++
++    def _detail(no: str):
++        if time.monotonic() - t1 > DETAIL_BUDGET_SEC:
++            return no, None, "시간 초과(다음 실행에서 이어서)"
++        try:
++            items, _, code = _get("getSubsidenceInfo01", {"sagoNo": no, "numOfRows": 10, "pageNo": 1},
++                                  timeout=20, tries=1)
++            return no, (items[0] if items else None), (code or "빈 응답")
++        except Exception as e:
++            return no, None, type(e).__name__
++
++    with ThreadPoolExecutor(max_workers=DETAIL_WORKERS) as ex:
++        for fut in as_completed([ex.submit(_detail, no) for no in need]):
++            no, info, why = fut.result()
++            if info:
++                details[no] = info
++            else:
++                detail_fail.append(why)
++
+     for r in seoul:
+         no = str(r.get("sagoNo"))
+         ev = known.get(no)
+         if ev is not None and not ev.get("detail_ok"):
+-            ev = None  # 지난번에 상세조회가 실패한 사고는 다시 조회한다 (동 정보를 채우기 위해)
++            ev = None  # 지난번에 상세조회가 안 된 사고는 이번에 받은 상세정보로 다시 만든다
+         if ev is None:
+-            info, detail_ok = {}, False
+-            try:
+-                items, _, code = _get("getSubsidenceInfo01", {"sagoNo": no, "numOfRows": 10, "pageNo": 1})
+-                info = items[0] if items else {}
+-                detail_ok = bool(info)
+-                if not info:
+-                    detail_fail.append(code or "빈 응답")
+-            except Exception as e:
+-                detail_fail.append(type(e).__name__)
++            info = details.get(no) or {}
++            detail_ok = bool(info)
+             gu = f(info, "sigungu") or f(r, "sigungu")
+             gu = gu.split()[-1] if gu else ""  # '서울특별시 강남구' 형태도 대응
+             dong = f(info, "dong") or f(r, "dong")
+@@ -266,7 +296,8 @@ def build(now: datetime, prev: dict) -> tuple[dict, str]:
+                      "fetched_at": now.isoformat(timespec="seconds"), "period": f"{START}~{now:%Y%m%d}",
+                      "total_national": len(rows), "seoul": len(events),
+                      "dong_level": sum(e["loc_level"] == "동" for e in events),
+-                     "detail_failed": len(detail_fail), "year_errors": year_errors},
++                     "detail_failed": len(detail_fail), "detail_pending": len(detail_fail),
++                     "year_errors": year_errors},
+             "events": events, "by_grid": by_grid, "by_dong": by_dong}
+     msg = (f"전국 {len(rows)}건 중 서울 {len(events)}건 (동 단위 {data['meta']['dong_level']}건, "
+            f"새 상세조회 {new}건, 상세조회 실패 {len(detail_fail)}건), 격자 {len(by_grid)}개, 동 {len(by_dong)}곳")
+@@ -287,7 +318,8 @@ def fetch(force: bool = False) -> str:
+         prev = {}
+     try:
+         last = datetime.fromisoformat(prev["meta"]["fetched_at"])
+-        if not force and now - last < timedelta(hours=REFRESH_HOURS):
++        wait = timedelta(minutes=PARTIAL_REFRESH_MIN) if prev["meta"].get("detail_pending") else timedelta(hours=REFRESH_HOURS)
++        if not force and now - last < wait:
+             return f"최근 수집본 사용 ({last:%m-%d %H:%M}, 서울 {prev['meta']['seoul']}건)"
+     except Exception:
+         pass
+diff --git a/scripts/run_snapshot.py b/scripts/run_snapshot.py
+index 8f98599..2b80e2b 100644
+--- a/scripts/run_snapshot.py
++++ b/scripts/run_snapshot.py
+@@ -23,6 +23,9 @@ import sys
+ import time
+ from pathlib import Path
+ 
++# GitHub Actions 로그에 진행 상황이 바로바로 찍히도록 (버퍼링 때문에 멈춘 것처럼 보이는 문제 방지)
++sys.stdout.reconfigure(line_buffering=True)
++
+ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+ 
+ import numpy as np
+@@ -172,6 +175,12 @@ def main() -> int:
+         print(f"  {'✅' if sewer else '⚠️ '} sewer: {sewer_src.detail}")
+         if sewer:
+             snap["sewer"] = sewer
++        # 관측소별 실제 강수량 → 지도에 '비 오는 중' 표시 (위험 점수 R과 별개로, 적은 비도 보이게)
++        stations = getattr(rain_adapter, "stations", None)
++        if stations:
++            snap["rain_obs"] = {"time": getattr(rain_adapter, "obs_time", None), "stations": stations}
++            wet = [s for s in stations if (s.get("r15") or 0) > 0 or (s.get("r1") or 0) > 0]
++            print(f"  🌧️ rain_obs: 관측소 {len(stations)}곳 중 비 오는 곳 {len(wet)}곳")
+ 
+     # 단계 분포 출력
+     cells = snap["cells"]
+diff --git a/src/sinkhole/sources/kma_live.py b/src/sinkhole/sources/kma_live.py
+index 1c5667e..6d4447a 100644
+--- a/src/sinkhole/sources/kma_live.py
++++ b/src/sinkhole/sources/kma_live.py
+@@ -102,6 +102,9 @@ class KmaLiveRainSource(RainSourceAdapter):
+         self.max_dist_deg = max_dist_deg
+         self.timeout = timeout
+         self.detail = ""
++        # 관측소별 실제 강수량 (지도에 '비 오는 중' 표시용). [{name, lat, lon, r15, r1, r3, r12, rday}]
++        self.stations: list[dict] = []
++        self.obs_time: str | None = None
+ 
+     # ── HTTP ────────────────────────────────────────────────────────────
+     def _get(self, url: str, params: dict) -> str:
+@@ -127,16 +130,20 @@ class KmaLiveRainSource(RainSourceAdapter):
+         i_stn = idx.get("STN", 1)
+         i_60 = idx.get("RN60M", idx.get("RN60"))
+         i_12 = idx.get("RN12H", idx.get("RN12"))
++        i_15 = idx.get("RN15M", idx.get("RN15"))
++        i_day = idx.get("RNDAY")
+         if i_60 is None:
+             raise RuntimeError(f"AWS 응답에서 RN-60m 컬럼을 찾지 못함 (헤더: {cols})")
+         out = []
+         for r in rows:
+-            if len(r) <= max(i_stn, i_60, i_12 or 0):
++            if len(r) <= max(i_stn, i_60, i_12 or 0, i_15 or 0, i_day or 0):
+                 continue
+             out.append({
+                 "STN": r[i_stn],
+                 "RN60": _num(r[i_60]),
+                 "RN12H": _num(r[i_12]) if i_12 is not None else np.nan,
++                "RN15": _num(r[i_15]) if i_15 is not None else np.nan,
++                "RNDAY": _num(r[i_day]) if i_day is not None else np.nan,
+             })
+         return pd.DataFrame(out)
+ 
+@@ -170,6 +177,17 @@ class KmaLiveRainSource(RainSourceAdapter):
+             raise RuntimeError("서울 주변 AWS 관측값 0개")
+         result = self._project(grid_df, st[["LAT", "LON"]].to_numpy(), st[["R1", "R3", "R12"]].to_numpy())
+         self.detail = f"AWS 매분자료 {tm:%Y-%m-%d %H:%M} KST, 서울 주변 관측소 {len(st)}곳"
++        rnd = lambda v: None if pd.isna(v) else round(float(v), 1)
++        self.stations = [
++            {"name": f"AWS {row.STN}", "lat": round(float(row.LAT), 5), "lon": round(float(row.LON), 5),
++             "r15": rnd(row.RN15), "r1": rnd(row.R1), "r3": rnd(row.R3), "r12": rnd(row.R12), "rday": rnd(row.RNDAY)}
++            for row in st.itertuples()
++        ]
++        self.obs_time = tm.isoformat(timespec="minutes")
++        raining = [s for s in self.stations if (s["r15"] or 0) > 0 or (s["r1"] or 0) > 0]
++        if raining:
++            top = max(raining, key=lambda s: s["r1"] or 0)
++            self.detail += f", 비 오는 관측소 {len(raining)}곳 (최대 1시간 {top['r1']}mm)"
+         return result
+ 
+     # ── 2) ASOS 서울(108) 시간자료 ───────────────────────────────────────
+@@ -185,6 +203,9 @@ class KmaLiveRainSource(RainSourceAdapter):
+         rn = np.nan_to_num(np.array(rn, dtype=np.float64), nan=0.0)  # ASOS는 무강수 시 결측 표기
+         r1, r3, r12 = rn[-1], rn[-3:].sum(), rn[-12:].sum()
+         self.detail = f"ASOS 서울(108) 시간자료 ~{end:%Y-%m-%d %H}시 KST (단일 지점)"
++        self.stations = [{"name": "ASOS 서울(108)", "lat": 37.5714, "lon": 126.9658, "r15": None,
++                          "r1": round(float(r1), 1), "r3": round(float(r3), 1), "r12": round(float(r12), 1), "rday": None}]
++        self.obs_time = end.isoformat(timespec="minutes")
+         return np.tile([r1, r3, r12], (len(grid_df), 1)).astype(np.float64)
+ 
+     # ── 투영 ─────────────────────────────────────────────────────────────
+diff --git a/tests/test_sinkhole_history.py b/tests/test_sinkhole_history.py
+index 6cdfc2b..6238b19 100644
+--- a/tests/test_sinkhole_history.py
++++ b/tests/test_sinkhole_history.py
+@@ -29,7 +29,7 @@ def test_parse_json_and_xml():
+ 
+ 
+ def test_build_seoul_only_and_located():
+-    def fake_get(op, params):
++    def fake_get(op, params, **kw):
+         if op == "getSubsidenceList01":
+             return fh.parse_items(LIST_JSON)
+         return [INFO[params["sagoNo"]]], 1, "00"
+@@ -61,7 +61,7 @@ def test_real_response_field_names():
+     items, total, code = fh.parse_items(REAL_LIST)
+     assert total == 2 and code == "0" and len(items) == 2
+ 
+-    def fake_get(op, params):
++    def fake_get(op, params, **kw):
+         if op == "getSubsidenceList01":
+             return fh.parse_items(REAL_LIST) if params["sagoDateFrom"].startswith("2025") else ([], 0, "0")
+         return [{"sagoNo": "20250050", "sigungu": "강동구", "dong": "명일동", "sinkDepth": "20", "deathCnt": "1"}], 1, "0"
+diff --git a/web/index.html b/web/index.html
+index 2159db8..6f3cb24 100644
+--- a/web/index.html
++++ b/web/index.html
+@@ -314,6 +314,7 @@
+     <span id="generated-at">데이터 로드 중…</span>
+     <span id="stale-badge">갱신 지연</span>
+     <span id="mode-badge">—</span>
++    <span id="rain-badge" style="display:none;padding:2px 8px;border-radius:12px;font-size:.7rem;font-weight:600;white-space:nowrap;flex-shrink:0"></span>
+     <span id="refresh-status" style="font-size:.7rem;color:#7d8590;margin-left:8px">자동 갱신 대기</span>
+   </div>
+   <div id="stage-counters">
+@@ -492,7 +493,7 @@
+ <!-- 감쇠·점수화 엔진 (Python 동일 로직) -->
+ <script src="js/sim.js?v=12"></script>
+ <!-- 지도 렌더링 -->
+-<script src="js/render.js?v=20"></script>
++<script src="js/render.js?v=21"></script>
+ 
+ </body>
+ </html>
+diff --git a/web/js/render.js b/web/js/render.js
+index a932791..fccb082 100644
+--- a/web/js/render.js
++++ b/web/js/render.js
+@@ -30,7 +30,8 @@ let playTimer = null, simElapsedH = 0;
+ let autoRefreshTimer = null;
+ let lastGeneratedAt = '';
+ let currentScenario = 'calm';
+-let RAIN_CORES = [];   // 지도에 표시할 강수 중심 [{lat, lon, km}]
++let RAIN_CORES = [];
++let RAIN_OBS = null;   // 실시간 관측소별 강수량 (snapshot.rain_obs)   // 지도에 표시할 강수 중심 [{lat, lon, km}]
+ let SCENARIO_BASE_TEXT = '';
+ let historyMode = 'off'; // 'off' | 'points' | 'dong'
+ 
+@@ -359,6 +360,25 @@ function updateDeckGLLayer() {
+     }
+   }
+ 
++  // ── 실시간 강수 관측 표시: 비가 오는 관측소에 파란 원 (위험 점수 반영 기준보다 적은 비도 보이게) ──
++  if (currentScenario === 'calm') {
++    const wet = rainWetStations();
++    if (wet.length) {
++      layers.push(new ScatterplotLayer({
++        id: 'rain-obs-layer',
++        data: wet,
++        getPosition: d => [d.lon, d.lat],
++        getRadius: d => 1200 + Math.min(20, Math.max(d.r1 || 0, (d.r15 || 0) * 4)) * 150,
++        radiusUnits: 'meters',
++        stroked: true, filled: true,
++        getFillColor: [56, 139, 253, 70],
++        getLineColor: [121, 192, 255, 230],
++        lineWidthMinPixels: 2,
++        pickable: true
++      }));
++    }
++  }
++
+   // ── 강수 중심 표시 (시나리오 모드) ──
+   if (currentScenario !== 'calm' && RAIN_CORES.length) {
+     layers.push(new ScatterplotLayer({
+@@ -457,6 +477,14 @@ function getTooltipContent({object, layer}) {
+       `
+     };
+   }
++  if (layer && layer.id === 'rain-obs-layer') {
++    const v = x => (x == null ? '-' : x + 'mm');
++    return { html: `<div style="padding:10px;background:rgba(13,17,23,.92);color:#fff;border-radius:6px;border:1px solid #388bfd;font-size:12px;line-height:1.6">
++      <b>🌧 ${object.gu ? object.gu + ' · ' : ''}${object.name}</b><br>
++      최근 15분 ${v(object.r15)} · 1시간 ${v(object.r1)} · 3시간 ${v(object.r3)}<br>
++      12시간 ${v(object.r12)}${object.rday != null ? ' · 오늘 누적 ' + object.rday + 'mm' : ''}<br>
++      <span style="color:#8b949e">위험 점수(R)는 1시간 20mm 또는 3시간 40mm 이상부터 반영</span></div>` };
++  }
+   if (layer && layer.id === 'complaints-layer') {
+     return { html: `<div style="padding: 10px; background: rgba(0,0,0,0.8); color: white; border-radius: 4px;">⚠️ 민원 접수: ${object.type}<br>긴급도: ${object.urgency}단계</div>` };
+   }
+@@ -622,6 +650,7 @@ function applySnapshot(snapData) {
+     source_detail: snapData.source_detail || {},
+     sewer: snapData.sewer || null
+   };
++  RAIN_OBS = snapData.rain_obs || null;
+   lastGeneratedAt = snapData.generated_at;
+ 
+   for (const c of snapData.cells) {
+@@ -841,9 +870,44 @@ function updateHeader(meta, cellsById) {
+   const label = meta.mode === 'real' ? (anyLive ? '실시간' : '샘플 데이터') : '시뮬레이션';
+   modeEl.textContent = label;
+   modeEl.style.color = label === '실시간' ? '#2ea043' : '#58a6ff';
++  updateRainBadge();
+   updateCounters(cellsById);
+ }
+ 
++// 비가 오는 관측소 목록 (최근 15분 또는 1시간 강수량 > 0). 가장 가까운 격자의 자치구 이름을 붙인다.
++function rainWetStations() {
++  if (!RAIN_OBS || !RAIN_OBS.stations) return [];
++  const wet = RAIN_OBS.stations.filter(s => (s.r15 || 0) > 0 || (s.r1 || 0) > 0);
++  for (const s of wet) {
++    if (s.gu) continue;
++    let best = null, bd = Infinity;
++    for (const g of Object.values(GRID_CELLS)) {
++      const d = (g.lat - s.lat) ** 2 + (g.lon - s.lon) ** 2;
++      if (d < bd) { bd = d; best = g.gu; }
++    }
++    s.gu = bd < 0.01 ? best : null;
++  }
++  return wet;
++}
++
++function updateRainBadge() {
++  const el = document.getElementById('rain-badge');
++  if (!el) return;
++  if (currentScenario !== 'calm' || !RAIN_OBS) { el.style.display = 'none'; return; }
++  const wet = rainWetStations();
++  el.style.display = 'inline';
++  if (!wet.length) {
++    el.textContent = '☀ 서울 강수 없음';
++    el.style.background = 'var(--bg-card2)'; el.style.color = '#8b949e'; el.style.border = '1px solid var(--border)';
++    el.title = `관측소 ${RAIN_OBS.stations.length}곳 기준`;
++    return;
++  }
++  const top = wet.reduce((a, b) => ((b.r1 || 0) > (a.r1 || 0) ? b : a));
++  el.textContent = `🌧 비 오는 중 · ${wet.length}곳 · 최대 1시간 ${top.r1 ?? 0}mm${top.gu ? ' (' + top.gu + ')' : ''}`;
++  el.style.background = 'rgba(56,139,253,.18)'; el.style.color = '#79c0ff'; el.style.border = '1px solid #388bfd';
++  el.title = '지도의 파란 원 = 비가 오는 관측소. 위험 점수(R)는 1시간 20mm 또는 3시간 40mm 이상부터 반영됩니다.';
++}
++
+ function updateCounters(cellsById) {
+   let s1 = 0, s2 = 0, s3 = 0;
+   for (const c of Object.values(cellsById)) {

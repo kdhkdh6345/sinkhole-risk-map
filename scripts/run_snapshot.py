@@ -23,6 +23,9 @@ import sys
 import time
 from pathlib import Path
 
+# GitHub Actions 로그에 진행 상황이 바로바로 찍히도록 (버퍼링 때문에 멈춘 것처럼 보이는 문제 방지)
+sys.stdout.reconfigure(line_buffering=True)
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import numpy as np
@@ -172,6 +175,12 @@ def main() -> int:
         print(f"  {'✅' if sewer else '⚠️ '} sewer: {sewer_src.detail}")
         if sewer:
             snap["sewer"] = sewer
+        # 관측소별 실제 강수량 → 지도에 '비 오는 중' 표시 (위험 점수 R과 별개로, 적은 비도 보이게)
+        stations = getattr(rain_adapter, "stations", None)
+        if stations:
+            snap["rain_obs"] = {"time": getattr(rain_adapter, "obs_time", None), "stations": stations}
+            wet = [s for s in stations if (s.get("r15") or 0) > 0 or (s.get("r1") or 0) > 0]
+            print(f"  🌧️ rain_obs: 관측소 {len(stations)}곳 중 비 오는 곳 {len(wet)}곳")
 
     # 단계 분포 출력
     cells = snap["cells"]
