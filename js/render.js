@@ -95,6 +95,7 @@ async function init() {
     }
     if (dongGeoJson) DONG_GEOJSON = dongGeoJson;
     DONG_HISTORY = (jisHistory && jisHistory.by_dong) ? jisHistory.by_dong : {};  // 가상 이력 기반 집계는 쓰지 않음
+    showDongHistoryStatus(jisHistory);
     if (nationwideGeoJson) NATIONWIDE_GEOJSON = nationwideGeoJson;
     if (pipesGeoJson) PIPES_GEOJSON = pipesGeoJson;
     if (sewerGu) SEWER_GU = sewerGu;
@@ -545,6 +546,22 @@ function getTooltipContent({object, layer}) {
       pointerEvents: 'none'
     }
   };
+}
+
+// 동별 발생 건수 레이어 옆에 실제 사고 이력 수집 상태를 보여준다 (비어 보일 때 이유를 알 수 있게).
+async function showDongHistoryStatus(jisHistory) {
+  const label = document.getElementById('chk-layer-dong');
+  if (!label || !label.parentElement) return;
+  const span = label.parentElement.querySelector('span') || label.parentElement.appendChild(document.createElement('span'));
+  const n = jisHistory && jisHistory.by_dong ? Object.keys(jisHistory.by_dong).length : 0;
+  if (n) {
+    const m = jisHistory.meta || {};
+    span.textContent = ` (국토교통부 지하안전정보, 서울 ${m.seoul ?? '-'}건 · ${n}개 동)`;
+    return;
+  }
+  const st = await fetchJSON(`data/snapshot_sinkhole_history_status.json?t=${Date.now()}`).catch(() => null);
+  span.textContent = ' (국토교통부 지하안전정보 — 아직 수집 전)';
+  if (st && st.message) span.title = `마지막 시도 ${st.tried_at}: ${st.message}`;
 }
 
 // ── 기능 1: 시나리오 전환 ────────────────────────────────────────────────
