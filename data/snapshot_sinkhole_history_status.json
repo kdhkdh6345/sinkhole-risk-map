@@ -1,5 +1,5 @@
 {
- "tried_at": "2026-11-17T10:57:39+09:00",
- "ok": false,
- "message": "서울 사고 0건 — 기존 파일 유지 (전국 1587건 중 서울 0건 (동 단위 0건, 새 상세조회 0건, 상세조회 실패 0건), 격자 0개, 동 0곳 / 목록 실패 연도: [\"2026: ReadTimeout HTTPSConnectionPool(host='apis.data.go.kr', port=443): Read timed out. (read timeout=30)\"])"
+ "tried_at": "2026-11-17T14:04:25+09:00",
+ "ok": true,
+ "message": "전국 1665건 중 서울 172건 (동 단위 140건, 새 상세조회 172건, 상세조회 실패 0건), 격자 102개, 동 90곳"
 }
