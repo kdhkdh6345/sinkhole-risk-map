@@ -1,11 +1,40 @@
 {
   "issues": [
     {
-      "title": "[안내] 현재 실시간으로 보고된 주요 지반침하 뉴스가 없습니다.",
-      "link": "#",
-      "description": "최근 30일간 '싱크홀' 관련 주요 보도가 없습니다.",
-      "type": "weather"
+      "title": "갑자기 땅으로 꺼진 행인들? 도심 한 복판 싱크홀 날벼락 [현장영상] / 채널A - 채널A",
+      "link": "https://news.google.com/rss/articles/CBMicEFVX3lxTE9YX0hCcWdjdnBZUko1VDlGSnZnWFBpeXNEYWhsbFhsNC1xSm5nMEgwai1ISEotOXVDb3piZl9OM0IyLUlhMU5sc09zT2hQdjZ2QjNRWUFIRmt4elZCTnhXdnUwV0I0RnRaRFpXcTRqbzg?oc=5",
+      "description": "채널A · 2026-11-19 — 클릭하여 원문을 확인하세요.",
+      "date": "2026-11-19",
+      "type": "news"
+    },
+    {
+      "title": "일본 나가오카 제설용 지하수, 겨울철 지층 수축 동반 - 비건뉴스",
+      "link": "https://news.google.com/rss/articles/CBMiZkFVX3lxTFA5QjlLRTFBdS1qWnBVSUFYRnZ4ZXZXalRLOUpWTlpoSi14Z0RnVFEwMWhFcDdpenhpUVgzRzVVOWl1bHlyazYwdnJqQkRobFh5X2ZMaGxoSTQ4bXNLVUg0Z3U2NUlCdw?oc=5",
+      "description": "비건뉴스 · 2026-11-19 — 클릭하여 원문을 확인하세요.",
+      "date": "2026-11-19",
+      "type": "news"
+    },
+    {
+      "title": "의정부시, '노후 하수관로' 정밀조사한다…116.67㎞ 구간 - 뉴시스",
+      "link": "https://news.google.com/rss/articles/CBMiYEFVX3lxTFAwTmhzcDZaWk1jSzdyTllyeHczNWtNVU15V2wwdzJ6MkE4U1NSQkxxeDlIRzE3YXEzV3FBVnktNVQ0STVEWEpiVHpIVlM3OW83NHRJVWJzWlBNLUpDU3R1QdIBeEFVX3lxTE5TdXh5a3hFck5WdkVOTklMUURYV0t2QmZKNFhjdjU3X05Ralc0NDdzWTUtSXRUQmxKcmFvOUNyRXpfUzhtN2RqTk1CNldoYzBuNHRCeTVWTE51eGZ3T0xzYVI4VUpsWXlSS1BvbWh1Z1NVaC00ZEZuLQ?oc=5",
+      "description": "뉴시스 · 2026-11-19 — 클릭하여 원문을 확인하세요.",
+      "date": "2026-11-19",
+      "type": "news"
+    },
+    {
+      "title": "싱크홀 탐지 레이다 이용 기준 마련…생활무전기 6년 더 쓴다 - KBS 뉴스",
+      "link": "https://news.google.com/rss/articles/CBMiW0FVX3lxTE1JMlFBeWJ4X3dYQlpka3FTNnhkS01ISkt0SS1RQmhaUHBVQUQtNDVNX3RIeTRjdUtFczdVRFB1aDJ3UjNzMmo5NEtxY29la1VPbXhUZHNkSFJpNjg?oc=5",
+      "description": "KBS 뉴스 · 2026-11-19 — 클릭하여 원문을 확인하세요.",
+      "date": "2026-11-19",
+      "type": "news"
+    },
+    {
+      "title": "의정부시, 노후 하수관로 정밀조사로 싱크홀 예방 나선다 - 데일리안",
+      "link": "https://news.google.com/rss/articles/CBMiowJBVV95cUxOM2NOQjRPd0J3Z0YtUG1lbEE5QU41c1Z0T1VIdVNOLWtwR2Y3VkNCWnctdkNXaXdHWldWelBmczF4X1NFcnpPdks3TVhOUkRqVlV3UVZWZE52MWJQYkxITXZZR2FGcUQxQlV0T2xqdDR5d0dTMkpCWVFDN29VQzZXT0pfV3pldGV2eTFmeUhjaTF2dHlHd2VFQnBONUd6LXpfMDAwcUQ2Z0oybUR6b2l6ZTFqYzY4aGVHTjRmb2pNdlYwOWdWWmFOSEdKb0VfVXhmWl8wS0dJVkpVMXRJSFNfZjdOaDQ2eGRuay12VWx1SHlQLTc2UTFVVTk5WlJMa0c0Q1Zzakx2WGo2X29TMlotMnpUSEpkN28wbzFWRXE5U2tlTnM?oc=5",
+      "description": "데일리안 · 2026-11-19 — 클릭하여 원문을 확인하세요.",
+      "date": "2026-11-19",
+      "type": "news"
     }
   ],
-  "updated_at": "2026-11-19T12:22:00.694471"
+  "updated_at": "2026-11-19T20:52:32.494934"
 }
